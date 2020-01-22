@@ -19,7 +19,7 @@ Program usage
 
 ::
 
-    usage: pg_seldump [-h] [--version] [-n SCHEMA [SCHEMA ...]] [--strict]
+    usage: pg_seldump [-h] [--version] [-n SCHEMA [SCHEMA ...]]
                       [--test] [-q | -v]
                       config [dsn]
 
@@ -28,8 +28,6 @@ Program usage
       dsn                   database connection string [default: '']
 
     optional arguments:
-      --strict              exit with error if a db object has no matching config
-                            entry
       --test                test the configuration to verify it works as expected
       -q, --quiet           talk less
       -v, --verbose         talk more
@@ -54,8 +52,8 @@ Data modifiers:
   into the dump with somethings else
 
 The objects in the database are matched to the rules in the config files.
-Every match will have a score according to how strict the selector matched the
-object (TODO: this is a lie atm):
+Every match will have a score according to how specific was the selector
+matched the object (TODO: this is a lie atm):
 
 - ``name``: 1000
 - ``names``: 500

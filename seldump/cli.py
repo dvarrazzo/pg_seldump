@@ -18,24 +18,20 @@ def parse_cmdline():
 
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
 
-    parser.add_argument("config", help="yaml file describing the data to dump")
+    parser.add_argument(
+        "--dsn", default="", help="database connection string [default: %(default)r]",
+    )
 
     parser.add_argument(
-        "dsn",
-        nargs="?",
-        default="",
-        help="database connection string [default: %(default)r]",
+        "config_files",
+        nargs="+",
+        metavar="config",
+        help="yaml file describing the data to dump",
     )
 
     # TODO: drop
     parser.add_argument(
         "-n", "--schema", nargs="+", help="only includes these schemas in the dump",
-    )
-
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="exit with error if a db object has no matching config entry",
     )
 
     parser.add_argument(

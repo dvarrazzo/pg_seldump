@@ -23,10 +23,9 @@ class DumpError(Exception):
 
 
 class Dumper:
-    def __init__(self, dsn, outfile=None, strict=False, test=False):
+    def __init__(self, dsn, outfile=None, test=False):
         self.dsn = dsn
         self.outfile = outfile or sys.stdout
-        self.strict = strict
         self.test = test
         self.config_objs = []
 
@@ -84,7 +83,9 @@ class Dumper:
                 "unknown config options: %s; got %s", ", ".join(sorted(unks)), cfg,
             )
 
-    ObjectConfig = namedtuple("ObjectConfig", "skip no_columns replace filter")
+    ObjectConfig = namedtuple(
+        "ObjectConfig", "skip no_columns replace filter filename lineno"
+    )
 
     def get_config(self, obj):
         for cfg in self.config_objs:
@@ -96,13 +97,10 @@ class Dumper:
                 no_columns=cfg.get("no_columns", []),
                 replace=cfg.get("replace", {}),
                 filter=cfg.get("filter"),
+                filename=cfg.filename,
+                lineno=cfg.lineno,
             )
             return rv
-
-        if self.strict:
-            raise DumpError("no config found for %s %s" % (obj.kind, obj.escaped))
-
-        return self.ObjectConfig(skip=False, no_columns=[], replace={}, filter=None)
 
     def config_matches(self, cfg, obj):
         if "name" in cfg:
@@ -151,6 +149,19 @@ class Dumper:
 
         for obj in objs + matviews:
             cfg = self.get_config(obj)
+            if cfg is None:
+                logger.debug(
+                    "%s %s doesn't match any rule: skipping", obj.kind, obj.escaped
+                )
+                continue
+
+            logger.debug(
+                "%s %s matches rule at %s:%s",
+                obj.kind,
+                obj.escaped,
+                cfg.filename,
+                cfg.lineno,
+            )
             if cfg.skip:
                 logger.debug("skipping %s %s", obj.kind, obj.escaped)
                 continue

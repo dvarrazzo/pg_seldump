@@ -41,9 +41,11 @@ Topic :: System :: Systems Administration
 Topic :: Utilities
 """
 
+# PyYAML version is relatively strict because we override internal interfaces.
+# Test before allowing a larger range.
 requirements = """
 psycopg2
-PyYAML
+PyYAML>=5,3,<5.4
 """
 
 setup(
@@ -56,7 +58,7 @@ setup(
     python_requires=">=3.6",
     install_requires=requirements,
     packages=find_packages(),
-    entry_points={"console_scripts": ["pg_seldump = seldump.__main__:script",]},
+    entry_points={"console_scripts": ["pg_seldump = seldump.__main__:script"]},
     classifiers=[x for x in classifiers.split("\n") if x],
     zip_safe=False,
     version=version,

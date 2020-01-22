@@ -6,10 +6,10 @@ This file is part of pg_seldump.
 """
 
 import sys
-import yaml
 
 from .dumper import Dumper, DumpError
 from .cli import parse_cmdline
+from .yaml import load_yaml
 
 import logging
 
@@ -22,13 +22,16 @@ def main():
     opt = parse_cmdline()
     logger.setLevel(opt.loglevel)
 
-    try:
-        cfg = yaml.safe_load(open(opt.config))
-    except Exception as e:
-        raise DumpError("error loading config file: %s" % e)
+    dumper = Dumper(dsn=opt.dsn, test=opt.test)
 
-    dumper = Dumper(dsn=opt.dsn, strict=opt.strict, test=opt.test)
-    dumper.add_config(cfg)
+    for fn in opt.config_files:
+        try:
+            cfg = load_yaml(fn)
+        except Exception as e:
+            raise DumpError("error loading config file: %s" % e)
+        else:
+            dumper.add_config(cfg)
+
     dumper.dump_data(schemas=opt.schema or None)
 
 
