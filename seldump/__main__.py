@@ -35,7 +35,7 @@ def main():
             matcher.add_config(cfg)
 
     dumper = Dumper(dsn=opt.dsn, matcher=matcher)
-    dumper.dump_data(schemas=opt.schema or None, test=opt.test)
+    dumper.dump_data(test=opt.test)
 
 
 def script():

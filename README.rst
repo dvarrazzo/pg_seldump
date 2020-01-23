@@ -18,19 +18,19 @@ Program usage
 =============
 
 ::
-
-    usage: pg_seldump [-h] [--version] [-n SCHEMA [SCHEMA ...]]
-                      [--test] [-q | -v]
-                      config [dsn]
+    usage: pg_seldump [-h] [--version] [--dsn DSN] [--test] [-q | -v]
+                      config [config ...]
 
     positional arguments:
-      config                yaml file describing the data to dump
-      dsn                   database connection string [default: '']
+      config         yaml file describing the data to dump
 
     optional arguments:
-      --test                test the configuration to verify it works as expected
-      -q, --quiet           talk less
-      -v, --verbose         talk more
+      -h, --help     show this help message and exit
+      --version      show program's version number and exit
+      --dsn DSN      database connection string [default: '']
+      --test         test the configuration to verify it works as expected
+      -q, --quiet    talk less
+      -v, --verbose  talk more
 
 The config file must be a YAML file containing a ``db_objects`` list of
 entries. Each entry may have:

@@ -33,14 +33,6 @@ def parse_cmdline():
         help="yaml file describing the data to dump",
     )
 
-    # TODO: drop
-    parser.add_argument(
-        "-n",
-        "--schema",
-        nargs="+",
-        help="only includes these schemas in the dump",
-    )
-
     parser.add_argument(
         "--test",
         action="store_true",

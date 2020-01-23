@@ -26,16 +26,13 @@ class Dumper:
         self.matcher = matcher
         self.outfile = outfile or sys.stdout
 
-    def dump_data(self, schemas=None, test=False):
+    def dump_data(self, test=False):
         # Refresh the materialized views at the end.
         # TODO: actually they should be dumped in dependency order.
         objs = []
         matviews = []
 
         for n in self.get_schemas_to_dump():
-            if schemas is not None and n not in schemas:
-                continue
-
             logger.debug("dumping objects in schema %s", n)
             for obj in self.get_objects_to_dump(schema=n):
                 if obj.kind == "materialized view":
