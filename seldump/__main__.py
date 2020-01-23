@@ -6,19 +6,20 @@ This file is part of pg_seldump.
 """
 
 import sys
+import logging
 
 from .dumper import Dumper, DumpError
 from .cli import parse_cmdline
 from .yaml import load_yaml
 
-import logging
-
 logger = logging.getLogger("seldump")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
 def main():
     """Run the program, raise exceptions."""
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     opt = parse_cmdline()
     logger.setLevel(opt.loglevel)
 
