@@ -308,7 +308,7 @@ class Dumper:
     def end_dump(self):
         self.write("\nanalyze;\n")
         # No highlight please
-        self.write("\n-- vim: set filetype=:;\n")
+        self.write("\n-- vim: set filetype=:\n")
 
     def get_schemas_to_dump(self):
         logger.debug("looking for schemas")
