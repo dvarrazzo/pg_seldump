@@ -60,6 +60,10 @@ def script():
         logger.error("%s", e)
         sys.exit(1)
 
+    except BrokenPipeError as e:
+        logger.error("dump interrupted: %s", e)
+        sys.exit(1)
+
     except Exception:
         logger.exception("unexpected error")
         sys.exit(1)
