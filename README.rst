@@ -38,14 +38,23 @@ entries. Each entry may have:
 Selectors (all the specified ones must match):
 
 - ``name``: name of the db object to dump
-- ``names``: regex to match names of db objects to dump
+- ``names``: list of names or regex of db objects to dump
 - ``schema``: schema name of the db object to dump
-- ``schemas``: regexp to match schema names of the db object to dump
-- ``kind``: kind of object match (table, sequence, a few others)
+- ``schemas``: list of schema names or regexp to match schema names of the
+  db object to dump
+- ``kind``: kind of object to match (table, sequence, a few others)
+- ``kinds``: list of kind of objects to match (table, sequence, a few others)
+- ``adjust_score``: adjustment for the match score to solve ties
 
 Data modifiers:
 
-- ``skip``: if true don't dump the matching table (default: false)
+- ``action``: what to do with the matched object:
+
+  - ``dump``: dump the object in the output (default)
+  - ``skip``: don't dump the object
+  - ``error``: raise an error in case of match (useful to create strict
+    description where all the db objects must be mentioned explicitly)
+
 - ``no_columns``: list of columns names to omit
 - ``filter``: WHERE condition to include only a subset of the records in the dump
 - ``replace``: mapping from column names to SQL expressions to replace values
@@ -53,10 +62,14 @@ Data modifiers:
 
 The objects in the database are matched to the rules in the config files.
 Every match will have a score according to how specific was the selector
-matched the object (TODO: this is a lie atm):
+matched the object.
 
-- ``name``: 1000
-- ``names``: 500
-- ``schema``: 100
-- ``schemas``: 50
-- ``kind``: 10
+- ``name`` or ``names`` list: 1000
+- ``names`` regexp: 500
+- ``schema`` or ``schemas`` list: 100
+- ``schemas`` regexp: 50
+- ``kind`` or ``kinds``: 10
+
+The rule with the highest score will apply. If two rules have exactly the same
+score the program will report an error; you can use ``adjust_score`` to break
+the tie.

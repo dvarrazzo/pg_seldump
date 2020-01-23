@@ -11,7 +11,7 @@ import logging
 from .cli import parse_cmdline
 from .matching import RuleMatcher
 from .dumping import Dumper
-from .exceptions import DumpError
+from .exceptions import SelDumpException, ConfigError
 from .yaml import load_yaml
 
 logger = logging.getLogger("seldump")
@@ -30,7 +30,7 @@ def main():
         try:
             cfg = load_yaml(fn)
         except Exception as e:
-            raise DumpError("error loading config file: %s" % e)
+            raise ConfigError("error loading config file: %s" % e)
         else:
             matcher.add_config(cfg)
 
@@ -43,7 +43,7 @@ def script():
     try:
         sys.exit(main())
 
-    except DumpError as e:
+    except SelDumpException as e:
         logger.error("%s", e)
         sys.exit(1)
 

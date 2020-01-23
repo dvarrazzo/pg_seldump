@@ -8,113 +8,295 @@ This file is part of pg_seldump.
 
 import re
 import logging
-from collections import namedtuple
+from operator import attrgetter
+from functools import lru_cache
 
 from .consts import REVKINDS, DUMPABLE_KINDS
-from .exceptions import DumpError
+from .exceptions import ConfigError
 
 logger = logging.getLogger("seldump.matching")
 
 
-ObjectConfig = namedtuple(
-    "ObjectConfig", "skip no_columns replace filter filename lineno"
-)
+class DumpRule:
+    """
+    Dump configuration of a set of database objects
+
+    Each DumpRule has a few selector attributes, to choose which objects it
+    applies, and a set of attributes specifying what action to take.
+    """
+
+    ACTIONS = ["dump", "skip", "error"]
+
+    def __init__(self):
+        # Matching attributes
+        self.names = set()
+        self.names_re = None
+        self.schemas = set()
+        self.schemas_re = None
+        self.kinds = set()
+        self.adjust_score = 0
+
+        # Actions
+        self.action = "dump"
+        self.no_columns = []
+        self.replace = {}
+        self.filter = None
+
+        # Description
+        self.filename = None
+        self.lineno = None
+
+    @property
+    @lru_cache(maxsize=1)
+    def score(self):
+        """
+        The score of the rule: the higher the stronger
+        """
+        score = self.adjust_score
+        if self.names:
+            score += 1000
+        if self.names_re:
+            score += 500
+        if self.schemas:
+            score += 100
+        if self.schemas_re:
+            score += 50
+        if self.kinds:
+            score += 10
+        return score
+
+    @property
+    def pos(self):
+        """
+        Return the file name and line no where the rule was parsed.
+        """
+        return f"{self.filename}:{self.lineno}"
+
+    def match(self, obj):
+        """
+        Return True if the db object *obj* matches the rule.
+        """
+        if self.names and obj.name not in self.names:
+            return False
+
+        if self.names_re is not None and not self.names_re.match(obj.name):
+            return False
+
+        if self.schemas and obj.schema not in self.schemas:
+            return False
+
+        if self.schemas_re is not None and not self.schemas_re.match(
+            obj.schema
+        ):
+            return False
+
+        if self.kinds and obj.kind not in self.kinds:
+            return False
+
+        return True
+
+    @classmethod
+    def from_config(cls, cfg):
+        """
+        Return a new DumpRule from a YAML content.
+        """
+        rv = cls()
+        rv.filename = cfg.filename
+        rv.lineno = cfg.lineno
+
+        if not isinstance(cfg, dict):
+            raise ConfigError(f"expected config dictionary, got {cfg}")
+
+        if "name" in cfg and "names" in cfg:
+            raise ConfigError(
+                f"can't specify both 'name' and 'names', at {rv.pos}"
+            )
+
+        if "name" in cfg:
+            if not isinstance(cfg["name"], str):
+                raise ConfigError(f"'name' should be a string, at {rv.pos}")
+            rv.names.add(cfg["name"])
+
+        if "names" in cfg:
+            if isinstance(cfg["names"], list) and all(
+                isinstance(name, str) for name in cfg["names"]
+            ):
+                rv.names.update(cfg["names"])
+            elif isinstance(cfg["names"], str):
+                try:
+                    rv.names_re = re.compile(cfg["names"], re.VERBOSE)
+                except re.error as e:
+                    raise ConfigError(
+                        f"'names' is not a valid regular expression: {e},"
+                        f" at {rv.pos}"
+                    )
+            else:
+                raise ConfigError(
+                    f"'names' should be a list of strings or a"
+                    f" regular expression, at {rv.pos}"
+                )
+
+        if "schema" in cfg and "schemas" in cfg:
+            raise ConfigError(
+                f"can't specify both 'schema' and 'schemas', at {rv.pos}"
+            )
+
+        if "schema" in cfg:
+            if not isinstance(cfg["schema"], str):
+                raise ConfigError(f"'schema' should be a string, at {rv.pos}")
+            rv.schemas.add(cfg["schema"])
+
+        if "schemas" in cfg:
+            if isinstance(cfg["schemas"], list) and all(
+                isinstance(name, str) for name in cfg["schemas"]
+            ):
+                rv.schemas.update(cfg["schemas"])
+            elif isinstance(cfg["schemas"], str):
+                try:
+                    rv.schemas_re = re.compile(cfg["schemas"], re.VERBOSE)
+                except re.error as e:
+                    raise ConfigError(
+                        f"'schemas' is not a valid regular expression: {e},"
+                        f" at {rv.pos}"
+                    )
+            else:
+                raise ConfigError(
+                    f"'schemas' should be a list of strings or"
+                    f" a regular expression, at {rv.pos}"
+                )
+
+        if "kind" in cfg and "kinds" in cfg:
+            raise ConfigError(
+                f"can't specify both 'kind' and 'kinds', at {rv.pos}"
+            )
+
+        if "kind" in cfg:
+            rv._check_kind(cfg["kind"])
+            rv.kinds.add(cfg["kind"])
+
+        if "kinds" in cfg:
+            if not isinstance(cfg["kinds"], list):
+                raise ConfigError(
+                    f"'kinds' must be a list of strings, at {rv.pos}"
+                )
+            for k in cfg["kinds"]:
+                rv._check_kind(k)
+            rv.kinds.update(cfg["kinds"])
+
+        if "action" in cfg:
+            if str(cfg["action"]).lower() not in DumpRule.ACTIONS:
+                actions = ", ".join(DumpRule.ACTIONS)
+                raise ConfigError(
+                    f"bad 'action': '{cfg['action']}';"
+                    f" accepted values are {actions}, at {rv.pos}"
+                )
+            rv.action = cfg["action"].lower()
+
+        if "skip" in cfg:
+            if "action" in cfg:
+                raise ConfigError(
+                    f"can't specify both 'skip' and 'action', at {rv.pos}"
+                )
+            rv.action = "skip" if cfg["skip"] else "dump"
+
+        if "no_columns" in cfg:
+            if not (
+                isinstance(cfg["no_columns"], list)
+                and all(isinstance(col, str) for col in cfg["no_columns"])
+            ):
+                raise ConfigError(
+                    f"'no_columns' must be a list of strings, at {rv.pos}"
+                )
+            rv.no_columns = cfg["no_columns"]
+
+        if "replace" in cfg:
+            if not (
+                isinstance(cfg["replace"], dict)
+                and all(isinstance(col, str) for col in cfg["replace"].keys())
+                and all(
+                    isinstance(expr, str) for expr in cfg["replace"].values()
+                )
+            ):
+                raise ConfigError(
+                    f"'replace' must be a dictionary of strings, at {rv.pos}"
+                )
+            rv.replace = cfg["replace"]
+
+        if "filter" in cfg:
+            if not isinstance(cfg["filter"], str):
+                raise ConfigError(f"'filter' must be a string, at {rv.pos}")
+            rv.filter = cfg["filter"]
+
+        if "adjust_score" in cfg:
+            if not isinstance(cfg["adjust_score"], (int, float)):
+                raise ConfigError(
+                    f"'adjust_score' must be a number, at {rv.pos}"
+                )
+            rv.adjust_score = cfg["adjust_score"]
+
+        unks = set(cfg) - set(
+            """
+            name names schema schemas kind kinds
+            action no_columns replace filter skip adjust_score
+            """.split()
+        )
+        if unks:
+            unks = ", ".join(sorted(unks))
+            logger.warning(f"unknown config option(s): {unks}, at {rv.pos}",)
+
+        return rv
+
+    def _check_kind(self, k):
+        if not isinstance(k, str) or REVKINDS.get(k) not in DUMPABLE_KINDS:
+            kinds = ", ".join(
+                sorted(k for k, v in REVKINDS.items() if v in DUMPABLE_KINDS)
+            )
+            raise ConfigError(
+                f"bad 'kind': '{k}';"
+                f" accepted values are: {kinds}, at {self.pos}"
+            )
 
 
 class RuleMatcher:
     def __init__(self):
-        self.config_objs = []
+        self.rules = []
 
     def add_config(self, cfg):
+        """
+        Add a new config structure to the matcher
+
+        The structure is what parsed by a json file. It must have a list
+        of rules called 'db_objects'.
+        """
         try:
             objs = cfg["db_objects"]
         except (KeyError, TypeError):
-            raise DumpError("the config file should have a db_objects list")
+            raise ConfigError(
+                "the config file should have a 'db_objects' list"
+            )
 
         if not isinstance(objs, list):
-            raise DumpError(
+            raise ConfigError(
                 "db_objects should be a list, got %s" % type(objs).__name__
             )
 
         for cfg in objs:
-            self.validate_config(cfg)
-            self.config_objs.append(cfg)
+            cfg = DumpRule.from_config(cfg)
+            self.rules.append(cfg)
 
-    def validate_config(self, cfg):
-        if not isinstance(cfg, dict):
-            raise DumpError("expected config dict, got %s" % cfg)
+    def get_rule(self, obj):
+        """
+        Return the best matching rule for an object, None if none found
+        """
+        rules = [rule for rule in self.rules if rule.match(obj)]
+        if not rules:
+            return None
 
-        if "name" in cfg and "names" in cfg:
-            raise DumpError(
-                "config can't specify both name and names, got %s" % cfg
-            )
-        if "schema" in cfg and "schemas" in cfg:
-            raise DumpError(
-                "config can't specify both schema and schemas, got %s" % cfg
-            )
-        if "kind" in cfg:
-            if REVKINDS.get(cfg["kind"]) not in DUMPABLE_KINDS:
-                kinds = sorted(
-                    k for k, v in REVKINDS.items() if v in DUMPABLE_KINDS
-                )
-                raise DumpError(
-                    "bad kind '%s', accepted values are: %s; got %s"
-                    % (cfg["kind"], ", ".join(kinds), cfg)
-                )
-        if "no_columns" in cfg:
-            if not isinstance(cfg["no_columns"], list):
-                raise DumpError(
-                    "bad no_columns %s: must be a list; got %s"
-                    % (cfg["no_columns"], cfg)
-                )
-        if "replace" in cfg:
-            if not isinstance(cfg["replace"], dict):
-                raise DumpError("bad replace: must be a dict; got %s" % (cfg,))
-
-        unks = set(cfg) - set(
-            """
-            filter kind name names no_columns replace schema schemas skip
-            """.split()
-        )
-        if unks:
-            logger.warning(
-                "unknown config options: %s; got %s",
-                ", ".join(sorted(unks)),
-                cfg,
+        rules.sort(key=attrgetter("score"), reverse=True)
+        if len(rules) > 1 and rules[0].score == rules[1].score:
+            raise ConfigError(
+                f"{obj.kind} {obj.escaped} matches more than one rule:"
+                f" at {rules[0].pos} and {rules[1].pos}"
             )
 
-    def get_config(self, obj):
-        for cfg in self.config_objs:
-            if not self.config_matches(cfg, obj):
-                continue
-
-            rv = ObjectConfig(
-                skip=cfg.get("skip", False),
-                no_columns=cfg.get("no_columns", []),
-                replace=cfg.get("replace", {}),
-                filter=cfg.get("filter"),
-                filename=cfg.filename,
-                lineno=cfg.lineno,
-            )
-            return rv
-
-    def config_matches(self, cfg, obj):
-        if "name" in cfg:
-            if cfg["name"] != obj.name:
-                return False
-        if "names" in cfg:
-            if not re.match(cfg["names"], obj.name, re.VERBOSE):
-                return False
-
-        if "schema" in cfg:
-            if cfg["schema"] != obj.schema:
-                return False
-        if "schemas" in cfg:
-            if not re.match(cfg["schemas"], obj.schema, re.VERBOSE):
-                return False
-
-        if "kind" in cfg:
-            if obj.kind != cfg["kind"]:
-                return False
-
-        return True
+        return rules[0]

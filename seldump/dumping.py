@@ -47,8 +47,8 @@ class Dumper:
             self.begin_dump()
 
         for obj in objs + matviews:
-            cfg = self.matcher.get_config(obj)
-            if cfg is None:
+            rule = self.matcher.get_rule(obj)
+            if rule is None:
                 logger.debug(
                     "%s %s doesn't match any rule: skipping",
                     obj.kind,
@@ -57,15 +57,16 @@ class Dumper:
                 continue
 
             logger.debug(
-                "%s %s matches rule at %s:%s",
-                obj.kind,
-                obj.escaped,
-                cfg.filename,
-                cfg.lineno,
+                "%s %s matches rule at %s", obj.kind, obj.escaped, rule.pos,
             )
-            if cfg.skip:
+            if rule.action == "skip":
                 logger.debug("skipping %s %s", obj.kind, obj.escaped)
                 continue
+            elif rule.action == "error":
+                raise DumpError(
+                    f"{obj.kind} {obj.escaped} matches the error rule"
+                    f" at {rule.pos}"
+                )
 
             try:
                 meth = getattr(self, "dump_" + obj.kind.replace(" ", "_"))
@@ -75,7 +76,7 @@ class Dumper:
                 )
             logger.info("dumping %s %s", obj.kind, obj.escaped)
             if not test:
-                meth(obj, cfg)
+                meth(obj, rule)
 
         if not test:
             self.end_dump()
