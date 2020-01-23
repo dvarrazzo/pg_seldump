@@ -10,14 +10,24 @@ what tables or other database objects to save. It is possible to extract only
 certain columns of the tables, only certain records, or to replace certain
 values with a different expression, for instance to anonymize data.
 
+The output of the program is a text file which can be used by psql_ to
+restore data into a database with a complete schema but with no data (or at
+least no conflicting data), e.g. using::
+
+    $ pg_seldump --dsn="dbname=sourcedb" datadump.yaml > dump.sql
+    ...
+    $ psql -1X --set ON_ERROR_STOP=1 -f dump.sql "dbname=targetdb"
+
 .. _PostgreSQL: https://www.postgresql.org/
 .. _pg_dump: https://www.postgresql.org/docs/current/app-pgdump.html
+.. _psql: https://www.postgresql.org/docs/current/app-psql.html
 
 
 Program usage
 =============
 
-::
+Usage::
+
     usage: pg_seldump [-h] [--version] [--dsn DSN] [--test] [-q | -v]
                       config [config ...]
 
@@ -32,7 +42,7 @@ Program usage
       -q, --quiet    talk less
       -v, --verbose  talk more
 
-The config file must be a YAML file containing a ``db_objects`` list of
+The ``config`` files must be YAML files containing a ``db_objects`` list of
 entries. Each entry may have:
 
 Selectors (all the specified ones must match):
@@ -44,7 +54,7 @@ Selectors (all the specified ones must match):
   db object to dump
 - ``kind``: kind of object to match (table, sequence, a few others)
 - ``kinds``: list of kind of objects to match (table, sequence, a few others)
-- ``adjust_score``: adjustment for the match score to solve ties
+- ``adjust_score``: adjustment for the match score to break rules ties
 
 Data modifiers:
 
