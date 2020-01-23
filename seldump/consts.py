@@ -5,6 +5,7 @@ This file is part of pg_seldump.
 """
 
 VERSION = "0.1.dev0"
+PROJECT_URL = "https://github.com/dvarrazzo/pg_seldump"
 
 # relkind values: https://www.postgresql.org/docs/11/catalog-pg-class.html
 PG_KINDS = {
