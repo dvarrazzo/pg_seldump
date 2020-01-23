@@ -40,7 +40,9 @@ def main():
         try:
             outfile = open(opt.outfile, "w")
         except Exception as e:
-            raise ConfigError(f"couldn't open {outfile} for writing: {e}")
+            raise ConfigError(
+                "couldn't open %s for writing: %s" % (outfile, e)
+            )
     else:
         outfile = sys.stdout
 

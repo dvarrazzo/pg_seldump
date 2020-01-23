@@ -17,7 +17,7 @@ def parse_cmdline():
     )
 
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {VERSION}"
+        "--version", action="version", version="%%(prog)s %s" % VERSION
     )
 
     parser.add_argument(

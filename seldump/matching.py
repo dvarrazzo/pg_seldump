@@ -70,7 +70,7 @@ class DumpRule:
         """
         Return the file name and line no where the rule was parsed.
         """
-        return f"{self.filename}:{self.lineno}"
+        return "%s:%s" % (self.filename, self.lineno)
 
     def match(self, obj):
         """
@@ -105,16 +105,16 @@ class DumpRule:
         rv.lineno = cfg.lineno
 
         if not isinstance(cfg, dict):
-            raise ConfigError(f"expected config dictionary, got {cfg}")
+            raise ConfigError("expected config dictionary, got %s" % cfg)
 
         if "name" in cfg and "names" in cfg:
             raise ConfigError(
-                f"can't specify both 'name' and 'names', at {rv.pos}"
+                "can't specify both 'name' and 'names', at %s" % rv.pos
             )
 
         if "name" in cfg:
             if not isinstance(cfg["name"], str):
-                raise ConfigError(f"'name' should be a string, at {rv.pos}")
+                raise ConfigError("'name' should be a string, at %s" % rv.pos)
             rv.names.add(cfg["name"])
 
         if "names" in cfg:
@@ -127,23 +127,25 @@ class DumpRule:
                     rv.names_re = re.compile(cfg["names"], re.VERBOSE)
                 except re.error as e:
                     raise ConfigError(
-                        f"'names' is not a valid regular expression: {e},"
-                        f" at {rv.pos}"
+                        "'names' is not a valid regular expression: %s,"
+                        " at %s" % (e, rv.pos)
                     )
             else:
                 raise ConfigError(
-                    f"'names' should be a list of strings or a"
-                    f" regular expression, at {rv.pos}"
+                    "'names' should be a list of strings or a"
+                    " regular expression, at %s" % rv.pos
                 )
 
         if "schema" in cfg and "schemas" in cfg:
             raise ConfigError(
-                f"can't specify both 'schema' and 'schemas', at {rv.pos}"
+                "can't specify both 'schema' and 'schemas', at %s" % rv.pos
             )
 
         if "schema" in cfg:
             if not isinstance(cfg["schema"], str):
-                raise ConfigError(f"'schema' should be a string, at {rv.pos}")
+                raise ConfigError(
+                    "'schema' should be a string, at %s" % rv.pos
+                )
             rv.schemas.add(cfg["schema"])
 
         if "schemas" in cfg:
@@ -156,18 +158,18 @@ class DumpRule:
                     rv.schemas_re = re.compile(cfg["schemas"], re.VERBOSE)
                 except re.error as e:
                     raise ConfigError(
-                        f"'schemas' is not a valid regular expression: {e},"
-                        f" at {rv.pos}"
+                        "'schemas' is not a valid regular expression: %s,"
+                        " at %s" % (e, rv.pos)
                     )
             else:
                 raise ConfigError(
-                    f"'schemas' should be a list of strings or"
-                    f" a regular expression, at {rv.pos}"
+                    "'schemas' should be a list of strings or"
+                    " a regular expression, at %s" % rv.pos
                 )
 
         if "kind" in cfg and "kinds" in cfg:
             raise ConfigError(
-                f"can't specify both 'kind' and 'kinds', at {rv.pos}"
+                "can't specify both 'kind' and 'kinds', at %s" % rv.pos
             )
 
         if "kind" in cfg:
@@ -177,7 +179,7 @@ class DumpRule:
         if "kinds" in cfg:
             if not isinstance(cfg["kinds"], list):
                 raise ConfigError(
-                    f"'kinds' must be a list of strings, at {rv.pos}"
+                    "'kinds' must be a list of strings, at %s" % rv.pos
                 )
             for k in cfg["kinds"]:
                 rv._check_kind(k)
@@ -187,15 +189,15 @@ class DumpRule:
             if str(cfg["action"]).lower() not in DumpRule.ACTIONS:
                 actions = ", ".join(DumpRule.ACTIONS)
                 raise ConfigError(
-                    f"bad 'action': '{cfg['action']}';"
-                    f" accepted values are {actions}, at {rv.pos}"
+                    "bad 'action': '%s'; accepted values are %s, at %s"
+                    % (cfg["action"], actions, rv.pos)
                 )
             rv.action = cfg["action"].lower()
 
         if "skip" in cfg:
             if "action" in cfg:
                 raise ConfigError(
-                    f"can't specify both 'skip' and 'action', at {rv.pos}"
+                    "can't specify both 'skip' and 'action', at %s" % rv.pos
                 )
             rv.action = "skip" if cfg["skip"] else "dump"
 
@@ -205,7 +207,7 @@ class DumpRule:
                 and all(isinstance(col, str) for col in cfg["no_columns"])
             ):
                 raise ConfigError(
-                    f"'no_columns' must be a list of strings, at {rv.pos}"
+                    "'no_columns' must be a list of strings, at %s" % rv.pos
                 )
             rv.no_columns = cfg["no_columns"]
 
@@ -218,19 +220,19 @@ class DumpRule:
                 )
             ):
                 raise ConfigError(
-                    f"'replace' must be a dictionary of strings, at {rv.pos}"
+                    "'replace' must be a dictionary of strings, at %s" % rv.pos
                 )
             rv.replace = cfg["replace"]
 
         if "filter" in cfg:
             if not isinstance(cfg["filter"], str):
-                raise ConfigError(f"'filter' must be a string, at {rv.pos}")
+                raise ConfigError("'filter' must be a string, at %s" % rv.pos)
             rv.filter = cfg["filter"]
 
         if "adjust_score" in cfg:
             if not isinstance(cfg["adjust_score"], (int, float)):
                 raise ConfigError(
-                    f"'adjust_score' must be a number, at {rv.pos}"
+                    "'adjust_score' must be a number, at %s" % rv.pos
                 )
             rv.adjust_score = cfg["adjust_score"]
 
@@ -242,7 +244,7 @@ class DumpRule:
         )
         if unks:
             unks = ", ".join(sorted(unks))
-            logger.warning(f"unknown config option(s): {unks}, at {rv.pos}",)
+            logger.warning("unknown config option(s): %s, at %s", unks, rv.pos)
 
         return rv
 
@@ -252,8 +254,8 @@ class DumpRule:
                 sorted(k for k, v in REVKINDS.items() if v in DUMPABLE_KINDS)
             )
             raise ConfigError(
-                f"bad 'kind': '{k}';"
-                f" accepted values are: {kinds}, at {self.pos}"
+                "bad 'kind': '%s'; accepted values are: %s, at %s"
+                % (k, kinds, self.pos)
             )
 
 
@@ -295,8 +297,8 @@ class RuleMatcher:
         rules.sort(key=attrgetter("score"), reverse=True)
         if len(rules) > 1 and rules[0].score == rules[1].score:
             raise ConfigError(
-                f"{obj.kind} {obj.escaped} matches more than one rule:"
-                f" at {rules[0].pos} and {rules[1].pos}"
+                "%s %s matches more than one rule: at %s and %s"
+                % (obj.kind, obj.escaped, rules[0].pos, rules[1].pos)
             )
 
         return rules[0]
