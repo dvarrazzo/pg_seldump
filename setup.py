@@ -55,7 +55,7 @@ setup(
     author_email="daniele.varrazzo@gmail.com",
     url="https://github.com/dvarrazzo/pg_seldump",
     license="BSD",
-    python_requires=">=3.6",
+    python_requires=">=3.5",
     install_requires=requirements,
     packages=find_packages(),
     entry_points={"console_scripts": ["pg_seldump = seldump.__main__:script"]},
