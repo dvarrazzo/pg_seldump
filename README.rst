@@ -28,8 +28,8 @@ Program usage
 
 Usage::
 
-    usage: pg_seldump [-h] [--version] [--dsn DSN] [--test] [-q | -v]
-                      config [config ...]
+    pg_seldump [-h] [--version] [--dsn DSN] [--test] [-q | -v]
+               config [config ...]
 
     positional arguments:
       config         yaml file describing the data to dump
@@ -42,8 +42,10 @@ Usage::
       -q, --quiet    talk less
       -v, --verbose  talk more
 
-The ``config`` files must be YAML files containing a ``db_objects`` list of
+The ``config`` files must be YAML_ files containing a ``db_objects`` list of
 entries. Each entry may have:
+
+.. _YAML: https://yaml.org/
 
 Selectors (all the specified ones must match):
 
