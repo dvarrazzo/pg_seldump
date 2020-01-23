@@ -28,19 +28,24 @@ Program usage
 
 Usage::
 
-    pg_seldump [-h] [--version] [--dsn DSN] [--test] [-q | -v]
+    pg_seldump [-h] [--version] [--dsn DSN] [--outfile OUTFILE] [--test]
+               [-q | -v]
                config [config ...]
 
+    Create a selective dump of a PostgreSQL database.
+
     positional arguments:
-      config         yaml file describing the data to dump
+      config                yaml file describing the data to dump
 
     optional arguments:
-      -h, --help     show this help message and exit
-      --version      show program's version number and exit
-      --dsn DSN      database connection string [default: '']
-      --test         test the configuration to verify it works as expected
-      -q, --quiet    talk less
-      -v, --verbose  talk more
+      -h, --help            show this help message and exit
+      --version             show program's version number and exit
+      --dsn DSN             database connection string [default: '']
+      --outfile OUTFILE, -o OUTFILE
+                            the file where to save the dump [default: stdout]
+      --test                test the configuration to verify it works as expected
+      -q, --quiet           talk less
+      -v, --verbose         talk more
 
 The ``config`` files must be YAML_ files containing a ``db_objects`` list of
 entries. Each entry may have:

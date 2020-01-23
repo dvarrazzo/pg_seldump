@@ -35,7 +35,20 @@ def main():
             matcher.add_config(cfg)
 
     dumper = Dumper(dsn=opt.dsn, matcher=matcher)
-    dumper.dump_data(test=opt.test)
+
+    if opt.outfile != "-":
+        try:
+            outfile = open(opt.outfile, "w")
+        except Exception as e:
+            raise ConfigError(f"couldn't open {outfile} for writing: {e}")
+    else:
+        outfile = sys.stdout
+
+    try:
+        dumper.dump_data(outfile=outfile, test=opt.test)
+    finally:
+        if opt.outfile != "-":
+            outfile.close()
 
 
 def script():

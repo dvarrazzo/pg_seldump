@@ -21,16 +21,23 @@ def parse_cmdline():
     )
 
     parser.add_argument(
+        "config_files",
+        nargs="+",
+        metavar="config",
+        help="yaml file describing the data to dump",
+    )
+
+    parser.add_argument(
         "--dsn",
         default="",
         help="database connection string [default: %(default)r]",
     )
 
     parser.add_argument(
-        "config_files",
-        nargs="+",
-        metavar="config",
-        help="yaml file describing the data to dump",
+        "--outfile",
+        "-o",
+        default="-",
+        help="the file where to save the dump [default: stdout]",
     )
 
     parser.add_argument(

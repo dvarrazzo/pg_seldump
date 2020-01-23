@@ -6,7 +6,6 @@ This file is part of pg_seldump.
 """
 
 import re
-import sys
 import logging
 from functools import lru_cache
 
@@ -21,12 +20,14 @@ logger = logging.getLogger("seldump.dumping")
 
 
 class Dumper:
-    def __init__(self, dsn, matcher, outfile=None):
+    def __init__(self, dsn, matcher):
         self.dsn = dsn
         self.matcher = matcher
-        self.outfile = outfile or sys.stdout
+        self.outfile = None
 
-    def dump_data(self, test=False):
+    def dump_data(self, outfile, test=False):
+        self.outfile = outfile
+
         # Refresh the materialized views at the end.
         # TODO: actually they should be dumped in dependency order.
         objs = []
