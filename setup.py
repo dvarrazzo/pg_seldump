@@ -8,6 +8,7 @@ pg_seldump -- setup script
 # This file is part of pg_seldump
 
 
+import re
 import os
 from setuptools import setup, find_packages
 
@@ -15,12 +16,11 @@ from setuptools import setup, find_packages
 # or we will get import errors on install if prerequisites are still missing
 fn = os.path.join(os.path.dirname(__file__), "seldump/consts.py")
 with open(fn) as f:
-    for line in f:
-        if line.startswith("VERSION ="):
-            version = line.split("'")[1]
-            break
-    else:
-        raise ValueError("cannot find VERSION in the consts module")
+    m = re.search(r"""(?mi)^VERSION\s*=\s*["']+([^'"]+)["']+""", f.read())
+if m:
+    version = m.group(1)
+else:
+    raise ValueError("cannot find VERSION in the consts module")
 
 
 classifiers = """
@@ -45,7 +45,7 @@ Topic :: Utilities
 # Test before allowing a larger range.
 requirements = """
 psycopg2
-PyYAML>=5,3,<5.4
+PyYAML>=5.3,<5.4
 """
 
 setup(
