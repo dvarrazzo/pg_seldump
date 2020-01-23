@@ -7,6 +7,7 @@ This file is part of pg_seldump.
 
 import sys
 import logging
+from signal import SIGPIPE
 
 from .cli import parse_cmdline
 from .matching import RuleMatcher
@@ -64,7 +65,8 @@ def script():
 
     except BrokenPipeError as e:
         logger.error("dump interrupted: %s", e)
-        sys.exit(1)
+        # Not entirely correct: might have been ESHUTDOWN
+        sys.exit(SIGPIPE + 128)
 
     except Exception:
         logger.exception("unexpected error")
