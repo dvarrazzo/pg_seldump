@@ -16,10 +16,14 @@ def parse_cmdline():
         description=__doc__, formatter_class=RawDescriptionHelpFormatter
     )
 
-    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {VERSION}"
+    )
 
     parser.add_argument(
-        "--dsn", default="", help="database connection string [default: %(default)r]",
+        "--dsn",
+        default="",
+        help="database connection string [default: %(default)r]",
     )
 
     parser.add_argument(
@@ -31,7 +35,10 @@ def parse_cmdline():
 
     # TODO: drop
     parser.add_argument(
-        "-n", "--schema", nargs="+", help="only includes these schemas in the dump",
+        "-n",
+        "--schema",
+        nargs="+",
+        help="only includes these schemas in the dump",
     )
 
     parser.add_argument(

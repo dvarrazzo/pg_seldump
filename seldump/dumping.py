@@ -50,7 +50,9 @@ class Dumper:
             cfg = self.matcher.get_config(obj)
             if cfg is None:
                 logger.debug(
-                    "%s %s doesn't match any rule: skipping", obj.kind, obj.escaped,
+                    "%s %s doesn't match any rule: skipping",
+                    obj.kind,
+                    obj.escaped,
                 )
                 continue
 
@@ -68,7 +70,9 @@ class Dumper:
             try:
                 meth = getattr(self, "dump_" + obj.kind.replace(" ", "_"))
             except AttributeError:
-                raise DumpError("don't know how to dump objects of kind %s" % obj.kind)
+                raise DumpError(
+                    "don't know how to dump objects of kind %s" % obj.kind
+                )
             logger.info("dumping %s %s", obj.kind, obj.escaped)
             if not test:
                 meth(obj, cfg)
@@ -148,14 +152,17 @@ class Dumper:
                 )
 
             self.write(
-                "\ncopy %s (%s) from stdin;\n" % (table.escaped, ", ".join(attrs_in))
+                "\ncopy %s (%s) from stdin;\n"
+                % (table.escaped, ", ".join(attrs_in))
             )
 
             logger.debug("exporting using: %s", source)
             try:
                 cur.copy_expert("copy %s to stdout" % source, self.outfile)
             except psycopg2.DatabaseError as e:
-                raise DumpError("failed to copy from table %s: %s" % (table.escaped, e))
+                raise DumpError(
+                    "failed to copy from table %s: %s" % (table.escaped, e)
+                )
 
             self.write("\\.\n")
 

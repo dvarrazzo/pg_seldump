@@ -39,7 +39,9 @@ class RichLoader(yaml.SafeLoader):
 
 
 # This really overrides the yaml dict parser
-RichLoader.add_constructor("tag:yaml.org,2002:map", RichLoader.construct_yaml_map)
+RichLoader.add_constructor(
+    "tag:yaml.org,2002:map", RichLoader.construct_yaml_map
+)
 
 
 def load_yaml(filename):
