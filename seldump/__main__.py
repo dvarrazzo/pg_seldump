@@ -8,8 +8,10 @@ This file is part of pg_seldump.
 import sys
 import logging
 
-from .dumper import Dumper, DumpError
 from .cli import parse_cmdline
+from .matching import RuleMatcher
+from .dumping import Dumper
+from .exceptions import DumpError
 from .yaml import load_yaml
 
 logger = logging.getLogger("seldump")
@@ -23,17 +25,17 @@ def main():
     opt = parse_cmdline()
     logger.setLevel(opt.loglevel)
 
-    dumper = Dumper(dsn=opt.dsn, test=opt.test)
-
+    matcher = RuleMatcher()
     for fn in opt.config_files:
         try:
             cfg = load_yaml(fn)
         except Exception as e:
             raise DumpError("error loading config file: %s" % e)
         else:
-            dumper.add_config(cfg)
+            matcher.add_config(cfg)
 
-    dumper.dump_data(schemas=opt.schema or None)
+    dumper = Dumper(dsn=opt.dsn, matcher=matcher)
+    dumper.dump_data(schemas=opt.schema or None, test=opt.test)
 
 
 def script():

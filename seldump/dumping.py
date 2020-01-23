@@ -9,125 +9,24 @@ import re
 import sys
 import logging
 from functools import lru_cache
-from collections import namedtuple
 
 import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import NamedTupleCursor
 
-logger = logging.getLogger("seldump.dumper")
+from .exceptions import DumpError
+from .consts import PG_KINDS, DUMPABLE_KINDS
 
-
-class DumpError(Exception):
-    """Controlled exception raised by the script."""
+logger = logging.getLogger("seldump.dumping")
 
 
 class Dumper:
-    def __init__(self, dsn, outfile=None, test=False):
+    def __init__(self, dsn, matcher, outfile=None):
         self.dsn = dsn
+        self.matcher = matcher
         self.outfile = outfile or sys.stdout
-        self.test = test
-        self.config_objs = []
 
-    # Configuration
-
-    def add_config(self, cfg):
-        try:
-            objs = cfg["db_objects"]
-        except (KeyError, TypeError):
-            raise DumpError("the config file should have a db_objects list")
-
-        if not isinstance(objs, list):
-            raise DumpError("db_objects should be a list, got %s" % type(objs).__name__)
-
-        for cfg in objs:
-            self.validate_config(cfg)
-            self.config_objs.append(cfg)
-
-    def validate_config(self, cfg):
-        if not isinstance(cfg, dict):
-            raise DumpError("expected config dict, got %s" % cfg)
-
-        if "name" in cfg and "names" in cfg:
-            raise DumpError("config can't specify both name and names, got %s" % cfg)
-        if "schema" in cfg and "schemas" in cfg:
-            raise DumpError(
-                "config can't specify both schema and schemas, got %s" % cfg
-            )
-        if "kind" in cfg:
-            if self.revkinds.get(cfg["kind"]) not in self.dumpable_kinds:
-                kinds = sorted(
-                    k for k, v in self.revkinds.items() if v in self.dumpable_kinds
-                )
-                raise DumpError(
-                    "bad kind '%s', accepted values are: %s; got %s"
-                    % (cfg["kind"], ", ".join(kinds), cfg)
-                )
-        if "no_columns" in cfg:
-            if not isinstance(cfg["no_columns"], list):
-                raise DumpError(
-                    "bad no_columns %s: must be a list; got %s"
-                    % (cfg["no_columns"], cfg)
-                )
-        if "replace" in cfg:
-            if not isinstance(cfg["replace"], dict):
-                raise DumpError("bad replace: must be a dict; got %s" % (cfg,))
-
-        unks = set(cfg) - set(
-            """
-            filter kind name names no_columns replace schema schemas skip
-            """.split()
-        )
-        if unks:
-            logger.warning(
-                "unknown config options: %s; got %s", ", ".join(sorted(unks)), cfg,
-            )
-
-    ObjectConfig = namedtuple(
-        "ObjectConfig", "skip no_columns replace filter filename lineno"
-    )
-
-    def get_config(self, obj):
-        for cfg in self.config_objs:
-            if not self.config_matches(cfg, obj):
-                continue
-
-            rv = self.ObjectConfig(
-                skip=cfg.get("skip", False),
-                no_columns=cfg.get("no_columns", []),
-                replace=cfg.get("replace", {}),
-                filter=cfg.get("filter"),
-                filename=cfg.filename,
-                lineno=cfg.lineno,
-            )
-            return rv
-
-    def config_matches(self, cfg, obj):
-        if "name" in cfg:
-            if cfg["name"] != obj.name:
-                return False
-        if "names" in cfg:
-            if not re.match(cfg["names"], obj.name, re.VERBOSE):
-                return False
-
-        if "schema" in cfg:
-            if cfg["schema"] != obj.schema:
-                return False
-        if "schemas" in cfg:
-            if not re.match(cfg["schemas"], obj.schema, re.VERBOSE):
-                return False
-
-        if "kind" in cfg:
-            if obj.kind != cfg["kind"]:
-                return False
-
-        return True
-
-    #
-    # Data dump
-    #
-
-    def dump_data(self, schemas=None):
+    def dump_data(self, schemas=None, test=False):
         # Refresh the materialized views at the end.
         # TODO: actually they should be dumped in dependency order.
         objs = []
@@ -144,14 +43,14 @@ class Dumper:
                 else:
                     objs.append(obj)
 
-        if not self.test:
+        if not test:
             self.begin_dump()
 
         for obj in objs + matviews:
-            cfg = self.get_config(obj)
+            cfg = self.matcher.get_config(obj)
             if cfg is None:
                 logger.debug(
-                    "%s %s doesn't match any rule: skipping", obj.kind, obj.escaped
+                    "%s %s doesn't match any rule: skipping", obj.kind, obj.escaped,
                 )
                 continue
 
@@ -171,28 +70,11 @@ class Dumper:
             except AttributeError:
                 raise DumpError("don't know how to dump objects of kind %s" % obj.kind)
             logger.info("dumping %s %s", obj.kind, obj.escaped)
-            if not self.test:
+            if not test:
                 meth(obj, cfg)
 
-        if not self.test:
+        if not test:
             self.end_dump()
-
-    # relkind values: https://www.postgresql.org/docs/11/catalog-pg-class.html
-    kinds = {
-        "r": "table",
-        "i": "index",
-        "S": "sequence",
-        "t": "toast table`",
-        "v": "view",
-        "m": "materialized view",
-        "c": "composite type",
-        "f": "foreign table",
-        "p": "partitioned table",
-        "I": "partitioned index",
-    }
-    revkinds = {v: k for k, v in kinds.items()}
-    stateless_kinds = set("ivcfI")
-    dumpable_kinds = set(kinds) - stateless_kinds - set("t")
 
     def dump_table(self, table, config):
         self._begin_table(table)
@@ -330,10 +212,11 @@ class Dumper:
 
     def get_objects_to_dump(self, schema):
         with self.cursor() as cur:
-            # The list of all the objects of a schema to inclue in the dump.
+            # The list of all the objects of a schema to include in the dump.
             #
-            # Certain objects don't have a state (e.g. views) so there is
-            # nothing to include in a data-only dump (self.stateless_kinds).
+            # Certain objects don't have a state (e.g. views) or are internal
+            # (e.g. toast tables) so there is nothing to include in a data-only
+            # dump (DUMPABLE_KINDS).
             #
             # If an object belongs to an extension (i.e. the pg_class ->
             # pg_depend -> pg_extension join finds a record), usually it must
@@ -370,19 +253,19 @@ class Dumper:
                 join pg_namespace n on n.oid = r.relnamespace
                 left join pg_depend d on d.objid = r.oid and d.deptype = 'e'
                 left join pg_extension e on d.refobjid = e.oid
-                where r.relkind <> all(%(stateless)s)
+                where r.relkind = any(%(stateless)s)
                 and n.nspname = %(schema)s
                 order by r.relname
                 ) x
                 where extension is null
                 or condition is not null
                 """,
-                {"schema": schema, "stateless": list(self.stateless_kinds)},
+                {"schema": schema, "stateless": list(DUMPABLE_KINDS)},
             )
 
             # Replace the kind from the single letter in pg_catalog to a
             # more descriptive string.
-            return [r._replace(kind=self.kinds[r.kind]) for r in cur]
+            return [r._replace(kind=PG_KINDS[r.kind]) for r in cur]
 
     def cursor(self):
         return self.connection.cursor()
