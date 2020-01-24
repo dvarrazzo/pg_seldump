@@ -58,7 +58,7 @@ setup(
     python_requires=">=3.5",
     install_requires=requirements,
     packages=find_packages(),
-    entry_points={"console_scripts": ["pg_seldump = seldump.__main__:script"]},
+    entry_points={"console_scripts": ["pg_seldump = seldump.cli:script"]},
     classifiers=[x for x in classifiers.split("\n") if x],
     zip_safe=False,
     version=version,
