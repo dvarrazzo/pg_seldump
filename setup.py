@@ -22,13 +22,16 @@ if m:
 else:
     raise ValueError("cannot find VERSION in the consts module")
 
+# Read the description from the README
+with open("README.rst") as f:
+    readme = f.read()
 
 classifiers = """
 Development Status :: 4 - Beta
 Environment :: Console
 Intended Audience :: Developers
 Intended Audience :: Information Technology
-Intended Audience :: Science / Research
+Intended Audience :: Science/Research
 Intended Audience :: System Administrators
 License :: OSI Approved :: BSD License
 Operating System :: POSIX
@@ -50,7 +53,8 @@ PyYAML>=5.3,<5.4
 
 setup(
     name="pg_seldump",
-    description=("Selective dump of PostgreSQL data."),
+    description=readme.splitlines()[0],
+    long_description="\n".join(readme.splitlines()[2:]).lstrip(),
     author="Daniele Varrazzo",
     author_email="daniele.varrazzo@gmail.com",
     url="https://github.com/dvarrazzo/pg_seldump",

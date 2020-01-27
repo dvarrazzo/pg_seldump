@@ -1,8 +1,7 @@
-==============================
 PostgreSQL selective data dump
 ==============================
 
-The utility allows to extract data from a PostgreSQL_ database with greater
+This tool allows to extract data from a PostgreSQL_ database with greater
 flexibility that tools like pg_dump_ allow.
 
 ``pg_seldump`` reads one of more dump definitions from YAML files and selects
@@ -24,7 +23,7 @@ least no conflicting data), e.g. using::
 
 
 Program usage
-=============
+-------------
 
 Usage::
 
@@ -88,5 +87,5 @@ matched the object.
 - ``kind`` or ``kinds``: 10
 
 The rule with the highest score will apply. If two rules have exactly the same
-score the program will report an error; you can use ``adjust_score`` to break
+score the program will report an error: you can use ``adjust_score`` to break
 the tie.
