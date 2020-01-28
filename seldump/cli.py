@@ -14,6 +14,7 @@ from .consts import VERSION
 from .matching import RuleMatcher
 from .dumping import Dumper
 from .exceptions import SelDumpException, ConfigError
+from .reading import DbReader
 from .yaml import load_yaml
 
 logger = logging.getLogger("seldump")
@@ -36,7 +37,8 @@ def main():
         else:
             matcher.add_config(cfg)
 
-    dumper = Dumper(dsn=opt.dsn, matcher=matcher)
+    reader = DbReader(dsn=opt.dsn)
+    dumper = Dumper(reader=reader, matcher=matcher)
 
     if opt.outfile != "-":
         try:
