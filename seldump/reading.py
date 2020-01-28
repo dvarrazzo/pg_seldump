@@ -43,30 +43,9 @@ class DbReader:
     def cursor(self):
         return self.connection.cursor()
 
-    def get_schemas_to_dump(self):
+    def get_objects_to_dump(self):
         """
-        Return the list of schema names to dump
-        """
-        logger.debug("looking for schemas")
-        with self.cursor() as cur:
-            # The system catalogs are 'information_schema' and the ones with
-            # 'pg_' prefix: those don't contain any user-defined object.
-            cur.execute(
-                """
-                select n.nspname as name
-                from pg_catalog.pg_namespace n
-                where n.nspname !~ '^pg_'
-                and n.nspname <> 'information_schema'
-                order by n.nspname
-                """
-            )
-            rv = [r.name for r in cur]
-            logger.debug("found %d schemas", len(rv))
-            return rv
-
-    def get_objects_to_dump(self, schema):
-        """
-        Return the list of dumpable objects contained into a schema
+        Return the list of dumpable objects in the database
         """
         with self.cursor() as cur:
             # The list of all the objects of a schema to include in the dump.
@@ -108,16 +87,17 @@ class DbReader:
                         as escaped
                 from pg_class r
                 join pg_namespace n on n.oid = r.relnamespace
+                    and n.nspname !~ '^pg_'
+                    and n.nspname <> 'information_schema'
                 left join pg_depend d on d.objid = r.oid and d.deptype = 'e'
                 left join pg_extension e on d.refobjid = e.oid
                 where r.relkind = any(%(stateless)s)
-                and n.nspname = %(schema)s
                 order by r.relname
                 ) x
                 where extension is null
                 or condition is not null
                 """,
-                {"schema": schema, "stateless": list(DUMPABLE_KINDS)},
+                {"stateless": list(DUMPABLE_KINDS)},
             )
 
             # Replace the kind from the single letter in pg_catalog to a

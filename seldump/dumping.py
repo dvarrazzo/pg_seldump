@@ -36,13 +36,11 @@ class Dumper:
         objs = []
         matviews = []
 
-        for n in self.reader.get_schemas_to_dump():
-            logger.debug("dumping objects in schema %s", n)
-            for obj in self.reader.get_objects_to_dump(schema=n):
-                if obj.kind == "materialized view":
-                    matviews.append(obj)
-                else:
-                    objs.append(obj)
+        for obj in self.reader.get_objects_to_dump():
+            if obj.kind == "materialized view":
+                matviews.append(obj)
+            else:
+                objs.append(obj)
 
         if not test:
             self.begin_dump()
