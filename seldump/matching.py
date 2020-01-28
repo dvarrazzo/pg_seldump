@@ -11,7 +11,7 @@ import logging
 from operator import attrgetter
 from functools import lru_cache
 
-from .consts import REVKINDS, DUMPABLE_KINDS
+from .consts import REVKINDS, DUMPABLE_KINDS, TABLE, PART_TABLE
 from .exceptions import ConfigError
 
 logger = logging.getLogger("seldump.matching")
@@ -41,6 +41,7 @@ class DumpRule:
         self.no_columns = []
         self.replace = {}
         self.filter = None
+        self.recurse = False
 
         # Description
         self.filename = None
@@ -229,6 +230,11 @@ class DumpRule:
                 raise ConfigError("'filter' must be a string, at %s" % rv.pos)
             rv.filter = cfg["filter"]
 
+        if "recurse" in cfg:
+            if not isinstance(recurse["filter"], bool):
+                raise ConfigError("'filter' must be a boolean, at %s" % rv.pos)
+            rv.recurse = cfg["recurse"]
+
         if "adjust_score" in cfg:
             if not isinstance(cfg["adjust_score"], (int, float)):
                 raise ConfigError(
@@ -262,6 +268,7 @@ class DumpRule:
 class RuleMatcher:
     def __init__(self):
         self.rules = []
+        self.reader = None
 
     def add_config(self, cfg):
         """
@@ -302,3 +309,34 @@ class RuleMatcher:
             )
 
         return rules[0]
+
+    def calculate_dependencies(self, reader):
+        self.reader = reader
+
+        objs = self.reader.get_objects_to_dump()
+        fkeys = self.reader.get_foreign_keys()
+        deps = defaultdict(list)
+        for fkey in fkeys:
+            deps[fkey.referring].append(fkey.referred)
+
+        paths = {}
+
+        def explore_paths(obj, path):
+            pass
+
+        for obj in objs:
+            if obj.kind not in (TABLE, PART_TABLE):
+                # The object doesn't depend explicitly on others
+                continue
+
+            rule = self.get_rule(obj)
+            if not rule:
+                # Not epxlicitly included in the dump
+                continue
+
+            if not rule.recurse:
+                # we don't have to explore this
+                continue
+
+            explore_paths(obj)
+            # TODO

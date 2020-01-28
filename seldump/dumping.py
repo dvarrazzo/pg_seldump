@@ -31,6 +31,8 @@ class Dumper:
     def dump_data(self, outfile, test=False):
         self.outfile = outfile
 
+        self.matcher.calculate_dependencies(self.reader)
+
         # Refresh the materialized views at the end.
         # TODO: actually they should be dumped in dependency order.
         objs = []

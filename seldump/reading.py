@@ -43,6 +43,7 @@ class DbReader:
     def cursor(self):
         return self.connection.cursor()
 
+    @lru_cache(maxsize=1)
     def get_objects_to_dump(self):
         """
         Return the list of dumpable objects in the database
@@ -68,6 +69,7 @@ class DbReader:
                 """
                 select * from (
                 select
+                    r.oid,
                     n.nspname as schema,
                     r.relname as name,
                     r.relkind as kind,
@@ -92,7 +94,7 @@ class DbReader:
                 left join pg_depend d on d.objid = r.oid and d.deptype = 'e'
                 left join pg_extension e on d.refobjid = e.oid
                 where r.relkind = any(%(stateless)s)
-                order by r.relname
+                order by n.nspname, r.relname
                 ) x
                 where extension is null
                 or condition is not null
@@ -103,6 +105,48 @@ class DbReader:
             # Replace the kind from the single letter in pg_catalog to a
             # more descriptive string.
             return [r._replace(kind=PG_KINDS[r.kind]) for r in cur]
+
+    @lru_cache(maxsize=1)
+    def get_foreign_keys(self):
+        """
+        return the foreing keys in the database
+        """
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    conname as name,
+                    conrelid as referring,
+                    confrelid as referred
+                from pg_constraint
+                where contype = 'f'
+                order by 1
+                """
+            )
+            # fkeys = cur.fetchall()
+
+            return cur.fetchall()
+
+        # objs = {obj.oid: obj for obj in self.get_objects_to_dump()}
+
+        # rv = []
+        # for fkey in fkeys:
+        #     if fkey.referring not in objs:
+        #         logger.warning("referring object with oid not found: %s")
+        #         continue
+
+        #     if fkey.referred not in objs:
+        #         logger.warning("referred object with oid not found: %s")
+        #         continue
+
+        #     rv.append(
+        #         fkey._replace(
+        #             referring=objs[fkey.referring],
+        #             referred=objs[fkey.referred],
+        #         )
+        #     )
+
+        # return rv
 
     def get_table_attributes(self, escaped_name):
         """
