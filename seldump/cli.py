@@ -13,6 +13,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from .consts import VERSION
 from .matching import RuleMatcher
 from .dumping import Dumper
+from .database import DbReader
 from .exceptions import SelDumpException, ConfigError
 from .yaml import load_yaml
 
@@ -36,7 +37,8 @@ def main():
         else:
             matcher.add_config(cfg)
 
-    dumper = Dumper(dsn=opt.dsn, matcher=matcher)
+    reader = DbReader(opt.dsn)
+    dumper = Dumper(reader=reader, matcher=matcher)
 
     if opt.outfile != "-":
         try:
