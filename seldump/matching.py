@@ -25,7 +25,13 @@ class DumpRule:
     applies, and a set of attributes specifying what action to take.
     """
 
-    ACTIONS = ["dump", "skip", "error"]
+    ACTION_DUMP = "dump"
+    ACTION_SKIP = "skip"
+    ACTION_ERROR = "error"
+    ACTION_DEP = "dep"
+
+    # The actions that can be chosen in the config file
+    ACTIONS = [ACTION_DUMP, ACTION_SKIP, ACTION_ERROR]
 
     def __init__(self):
         # Matching attributes
@@ -37,7 +43,7 @@ class DumpRule:
         self.adjust_score = 0
 
         # Actions
-        self.action = "dump"
+        self.action = self.ACTION_DUMP
         self.no_columns = []
         self.replace = {}
         self.filter = None

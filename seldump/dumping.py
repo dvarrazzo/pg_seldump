@@ -14,7 +14,8 @@ import psycopg2
 from psycopg2 import sql
 
 from .exceptions import DumpError
-from .consts import PROJECT_URL, VERSION
+from .matching import DumpRule
+from .consts import KIND_MATVIEW, KIND_SEQUENCE, PROJECT_URL, VERSION
 
 logger = logging.getLogger("seldump.dumping")
 
@@ -37,19 +38,17 @@ class Dumper:
         objs = []
         matviews = []
 
-        for n in self.reader.get_schemas():
-            logger.debug("dumping objects in schema %s", n)
-            for obj in self.reader.get_objects_to_dump(schema=n):
-                if obj.kind == "materialized view":
-                    matviews.append(obj)
-                else:
-                    objs.append(obj)
+        for obj in self.reader.get_objects_to_dump():
+            if obj.kind == KIND_MATVIEW:
+                matviews.append(obj)
+            else:
+                objs.append(obj)
 
         if not test:
             self.begin_dump()
 
         for obj in objs + matviews:
-            rule = self.matcher.get_rule(obj)
+            rule = self.get_rule(obj)
             if rule is None:
                 logger.debug(
                     "%s %s doesn't match any rule: skipping",
@@ -58,13 +57,10 @@ class Dumper:
                 )
                 continue
 
-            logger.debug(
-                "%s %s matches rule at %s", obj.kind, obj.escaped, rule.pos
-            )
-            if rule.action == "skip":
+            if rule.action == rule.ACTION_SKIP:
                 logger.debug("skipping %s %s", obj.kind, obj.escaped)
                 continue
-            elif rule.action == "error":
+            elif rule.action == rule.ACTION_ERROR:
                 raise DumpError(
                     "%s %s matches the error rule at %s"
                     % (obj.kind, obj.escaped, rule.pos)
@@ -82,6 +78,70 @@ class Dumper:
 
         if not test:
             self.end_dump()
+
+    def get_rule(self, obj):
+        """
+        Return the rule matching the object.
+        """
+        # First just check for a basic rule matching
+        rule = self.matcher.get_rule(obj)
+        if rule is not None:
+            logger.debug(
+                "%s %s matches rule at %s", obj.kind, obj.escaped, rule.pos
+            )
+            return rule
+
+        # If not found, maybe it's a sequence used by a table dumped anyway
+        # in such case we want to dump it
+        if obj.kind != KIND_SEQUENCE:
+            return
+
+        for table, column in self.reader.get_tables_using_sequence(obj.oid):
+            rule = self.matcher.get_rule(table)
+            if rule is not None:
+                if rule.action == rule.ACTION_ERROR:
+                    raise DumpError(
+                        "%s %s depends on %s %s matching the error rule at %s"
+                        % (
+                            obj.kind,
+                            obj.escaped,
+                            table.kind,
+                            table.escaped,
+                            rule.pos,
+                        )
+                    )
+                if rule.action == rule.ACTION_SKIP:
+                    continue
+
+                if column in rule.no_columns:
+                    logger.debug(
+                        "sequence %s depends on %s.%s which is not dumped",
+                        obj.name,
+                        table.name,
+                        column,
+                    )
+                    continue
+
+                if column in rule.replace:
+                    logger.debug(
+                        "sequence %s depends on %s.%s which is replaced",
+                        obj.name,
+                        table.name,
+                        column,
+                    )
+                    continue
+
+                # we found a table wanting this sequence
+                rule = DumpRule()
+                rule.action = rule.ACTION_DEP
+                logger.debug(
+                    "%s %s is needed by matched %s %s",
+                    obj.kind,
+                    obj.escaped,
+                    table.kind,
+                    table.escaped,
+                )
+                return rule
 
     def dump_table(self, table, config):
         self._begin_table(table)
