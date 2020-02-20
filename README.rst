@@ -58,9 +58,19 @@ Selectors (all the specified ones must match):
 - ``schema``: schema name of the db object to dump
 - ``schemas``: list of schema names or regexp to match schema names of the
   db object to dump
-- ``kind``: kind of object to match (table, sequence, a few others)
-- ``kinds``: list of kind of objects to match (table, sequence, a few others)
+- ``kind``: kind of object to match. Can be:
+
+  - ``table``
+  - ``sequence``
+  - ``paritioned table``
+  - ``materialized view``
+
+- ``kinds``: list of kind of objects to match (like for ``kind``)
 - ``adjust_score``: adjustment for the match score to break rules ties
+
+.. note::
+    Sequences are selected automatically if they are used in default values by
+    dumped tables.
 
 Data modifiers:
 
@@ -69,7 +79,7 @@ Data modifiers:
   - ``dump``: dump the object in the output (default)
   - ``skip``: don't dump the object
   - ``error``: raise an error in case of match (useful to create strict
-    description where all the db objects must be mentioned explicitly)
+    descriptions where all the db objects must be mentioned explicitly)
 
 - ``no_columns``: list of columns names to omit
 - ``filter``: WHERE condition to include only a subset of the records in the dump
