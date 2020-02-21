@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Database objects dumping.
+Writing to a dump file.
 
 This file is part of pg_seldump.
 """
 
 import re
+import sys
 import math
 import logging
 from datetime import datetime
@@ -14,142 +15,27 @@ import psycopg2
 from psycopg2 import sql
 
 from .exceptions import DumpError
-from .matching import DumpRule
-from .consts import KIND_MATVIEW, KIND_SEQUENCE, PROJECT_URL, VERSION
+from .consts import PROJECT_URL, VERSION
 
-logger = logging.getLogger("seldump.dumping")
+logger = logging.getLogger("seldump.dumpwriter")
 
 
-class Dumper:
-    def __init__(self, reader, matcher):
+class DumpWriter:
+    def __init__(self, outfile, reader):
+        self.outfile = outfile
         self.reader = reader
-        self.matcher = matcher
-        self.outfile = None
 
         self._start_time = None
         self._copy_start_pos = None
         self._copy_size = None
 
-    def dump_data(self, outfile, test=False):
-        self.outfile = outfile
-
-        # Refresh the materialized views at the end.
-        # TODO: actually they should be dumped in dependency order.
-        objs = []
-        matviews = []
-
-        for obj in self.reader.get_objects_to_dump():
-            if obj.kind == KIND_MATVIEW:
-                matviews.append(obj)
-            else:
-                objs.append(obj)
-
-        if not test:
-            self.begin_dump()
-
-        for obj in objs + matviews:
-            rule = self.get_rule(obj)
-            if rule is None:
-                logger.debug(
-                    "%s %s doesn't match any rule: skipping",
-                    obj.kind,
-                    obj.escaped,
-                )
-                continue
-
-            if rule.action == rule.ACTION_SKIP:
-                logger.debug("skipping %s %s", obj.kind, obj.escaped)
-                continue
-
-            elif rule.action == rule.ACTION_ERROR:
-                raise DumpError(
-                    "%s %s matches the error rule at %s"
-                    % (obj.kind, obj.escaped, rule.pos)
-                )
-
-            try:
-                meth = getattr(self, "dump_" + obj.kind.replace(" ", "_"))
-            except AttributeError:
-                raise DumpError(
-                    "don't know how to dump objects of kind %s" % obj.kind
-                )
-            logger.info("dumping %s %s", obj.kind, obj.escaped)
-            if not test:
-                meth(obj, rule)
-
-        if not test:
-            self.end_dump()
-
-    def get_rule(self, obj):
-        """
-        Return the rule matching the object.
-        """
-        # First just check for a basic rule matching
-        rule = self.matcher.get_rule(obj)
-        if rule is not None:
-            logger.debug(
-                "%s %s matches rule at %s", obj.kind, obj.escaped, rule.pos
-            )
-            return rule
-
-        # If not found, maybe it's a sequence used by a table dumped anyway
-        # in such case we want to dump it
-        if obj.kind == KIND_SEQUENCE:
-            return self._get_sequence_dependency_rule(obj)
-
-    def _get_sequence_dependency_rule(self, seq):
-        for table, column in self.reader.get_tables_using_sequence(seq.oid):
-            rule = self.matcher.get_rule(table)
-            if rule is None:
-                continue
-
-            if rule.action == rule.ACTION_ERROR:
-                raise DumpError(
-                    "%s %s depends on %s %s matching the error rule at %s"
-                    % (
-                        seq.kind,
-                        seq.escaped,
-                        table.kind,
-                        table.escaped,
-                        rule.pos,
-                    )
-                )
-            if rule.action == rule.ACTION_SKIP:
-                continue
-
-            if column in rule.no_columns:
-                logger.debug(
-                    "%s %s depends on %s.%s which is not dumped",
-                    seq.kind,
-                    seq.escaped,
-                    table.escaped,
-                    column,
-                )
-                continue
-
-            if column in rule.replace:
-                logger.debug(
-                    "%s %s depends on %s.%s which is replaced",
-                    seq.kind,
-                    seq.escaped,
-                    table.escaped,
-                    column,
-                )
-                continue
-
-            # we found a table wanting this sequence
-            rule = DumpRule()
-            rule.action = rule.ACTION_DEP
-            logger.debug(
-                "%s %s is needed by matched %s %s",
-                seq.kind,
-                seq.escaped,
-                table.kind,
-                table.escaped,
-            )
-            return rule
+    def close(self):
+        if self.outfile is not sys.stdout:
+            self.outfile.close()
 
     def dump_table(self, table, config):
+        logger.info("writing %s %s", table.kind, table.escaped)
+
         self._begin_table(table)
         self._copy_table(table, config)
         self._end_table(table)
@@ -249,6 +135,8 @@ class Dumper:
             return ""
 
     def dump_sequence(self, seq, config):
+        logger.info("writing %s %s", seq.kind, seq.escaped)
+
         val = self.reader.get_sequence_value(seq.escaped)
         stmt = sql.SQL("\nselect pg_catalog.setval({}, {}, true);\n\n").format(
             sql.Literal(seq.escaped), sql.Literal(val)
@@ -256,6 +144,8 @@ class Dumper:
         self.write(self.reader.obj_as_string(stmt))
 
     def dump_materialized_view(self, matview, config):
+        logger.info("writing %s %s", matview.kind, matview.escaped)
+
         self.write("\nrefresh materialized view %s;\n" % matview.escaped)
 
     def begin_dump(self):

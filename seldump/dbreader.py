@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+"""
+Reading object from a PostgreSQL database.
+
+This file is part of pg_seldump.
+"""
+
 import logging
 from functools import lru_cache
 from collections import defaultdict
@@ -10,7 +16,7 @@ from psycopg2.extras import NamedTupleCursor
 from .exceptions import DumpError
 from .consts import DUMPABLE_KINDS, PG_KINDS
 
-logger = logging.getLogger("seldump.database")
+logger = logging.getLogger("seldump.dbreader")
 
 
 class DbReader:

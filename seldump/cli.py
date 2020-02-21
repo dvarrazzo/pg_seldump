@@ -11,9 +11,10 @@ from signal import SIGPIPE
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
 from .consts import VERSION
-from .matching import RuleMatcher
-from .dumping import Dumper
-from .database import DbReader
+from .dumper import Dumper
+from .dbreader import DbReader
+from .dumpwriter import DumpWriter
+from .dummywriter import DummyWriter
 from .exceptions import SelDumpException, ConfigError
 from .yaml import load_yaml
 
@@ -28,33 +29,36 @@ def main():
     opt = parse_cmdline()
     logger.setLevel(opt.loglevel)
 
-    matcher = RuleMatcher()
+    writer = DummyWriter()
+    reader = DbReader(opt.dsn)
+    dumper = Dumper(reader=reader, writer=writer)
+
     for fn in opt.config_files:
         try:
             cfg = load_yaml(fn)
         except Exception as e:
             raise ConfigError("error loading config file: %s" % e)
         else:
-            matcher.add_config(cfg)
+            dumper.add_config(cfg)
 
-    reader = DbReader(opt.dsn)
-    dumper = Dumper(reader=reader, matcher=matcher)
+    if not opt.test:
+        if opt.outfile != "-":
+            try:
+                outfile = open(opt.outfile, "w")
+            except Exception as e:
+                raise ConfigError(
+                    "couldn't open %s for writing: %s" % (outfile, e)
+                )
+        else:
+            outfile = sys.stdout
 
-    if opt.outfile != "-":
-        try:
-            outfile = open(opt.outfile, "w")
-        except Exception as e:
-            raise ConfigError(
-                "couldn't open %s for writing: %s" % (outfile, e)
-            )
-    else:
-        outfile = sys.stdout
+        writer = DumpWriter(outfile=outfile, reader=reader)
+        dumper.writer = writer
 
     try:
-        dumper.dump_data(outfile=outfile, test=opt.test)
+        dumper.perform_dump()
     finally:
-        if opt.outfile != "-":
-            outfile.close()
+        writer.close()
 
 
 def script():

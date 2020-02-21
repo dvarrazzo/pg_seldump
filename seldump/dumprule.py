@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 
 """
-Dump rules and matching.
+Rule to configure dumping of certain db objects.
 
 This file is part of pg_seldump.
 """
 
 import re
 import logging
-from operator import attrgetter
 from functools import lru_cache
 
 from .consts import REVKINDS, DUMPABLE_KINDS
 from .exceptions import ConfigError
 
-logger = logging.getLogger("seldump.matching")
+logger = logging.getLogger("seldump.dumprule")
 
 
 class DumpRule:
@@ -263,48 +262,3 @@ class DumpRule:
                 "bad 'kind': '%s'; accepted values are: %s, at %s"
                 % (k, kinds, self.pos)
             )
-
-
-class RuleMatcher:
-    def __init__(self):
-        self.rules = []
-
-    def add_config(self, cfg):
-        """
-        Add a new config structure to the matcher
-
-        The structure is what parsed by a json file. It must have a list
-        of rules called 'db_objects'.
-        """
-        try:
-            objs = cfg["db_objects"]
-        except (KeyError, TypeError):
-            raise ConfigError(
-                "the config file should have a 'db_objects' list"
-            )
-
-        if not isinstance(objs, list):
-            raise ConfigError(
-                "db_objects should be a list, got %s" % type(objs).__name__
-            )
-
-        for cfg in objs:
-            cfg = DumpRule.from_config(cfg)
-            self.rules.append(cfg)
-
-    def get_rule(self, obj):
-        """
-        Return the best matching rule for an object, None if none found
-        """
-        rules = [rule for rule in self.rules if rule.match(obj)]
-        if not rules:
-            return None
-
-        rules.sort(key=attrgetter("score"), reverse=True)
-        if len(rules) > 1 and rules[0].score == rules[1].score:
-            raise ConfigError(
-                "%s %s matches more than one rule: at %s and %s"
-                % (obj.kind, obj.escaped, rules[0].pos, rules[1].pos)
-            )
-
-        return rules[0]
