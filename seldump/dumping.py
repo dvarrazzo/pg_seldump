@@ -60,6 +60,7 @@ class Dumper:
             if rule.action == rule.ACTION_SKIP:
                 logger.debug("skipping %s %s", obj.kind, obj.escaped)
                 continue
+
             elif rule.action == rule.ACTION_ERROR:
                 raise DumpError(
                     "%s %s matches the error rule at %s"
@@ -93,55 +94,60 @@ class Dumper:
 
         # If not found, maybe it's a sequence used by a table dumped anyway
         # in such case we want to dump it
-        if obj.kind != KIND_SEQUENCE:
-            return
+        if obj.kind == KIND_SEQUENCE:
+            return self._get_sequence_dependency_rule(obj)
 
-        for table, column in self.reader.get_tables_using_sequence(obj.oid):
+    def _get_sequence_dependency_rule(self, seq):
+        for table, column in self.reader.get_tables_using_sequence(seq.oid):
             rule = self.matcher.get_rule(table)
-            if rule is not None:
-                if rule.action == rule.ACTION_ERROR:
-                    raise DumpError(
-                        "%s %s depends on %s %s matching the error rule at %s"
-                        % (
-                            obj.kind,
-                            obj.escaped,
-                            table.kind,
-                            table.escaped,
-                            rule.pos,
-                        )
-                    )
-                if rule.action == rule.ACTION_SKIP:
-                    continue
+            if rule is None:
+                continue
 
-                if column in rule.no_columns:
-                    logger.debug(
-                        "sequence %s depends on %s.%s which is not dumped",
-                        obj.name,
-                        table.name,
-                        column,
+            if rule.action == rule.ACTION_ERROR:
+                raise DumpError(
+                    "%s %s depends on %s %s matching the error rule at %s"
+                    % (
+                        seq.kind,
+                        seq.escaped,
+                        table.kind,
+                        table.escaped,
+                        rule.pos,
                     )
-                    continue
-
-                if column in rule.replace:
-                    logger.debug(
-                        "sequence %s depends on %s.%s which is replaced",
-                        obj.name,
-                        table.name,
-                        column,
-                    )
-                    continue
-
-                # we found a table wanting this sequence
-                rule = DumpRule()
-                rule.action = rule.ACTION_DEP
-                logger.debug(
-                    "%s %s is needed by matched %s %s",
-                    obj.kind,
-                    obj.escaped,
-                    table.kind,
-                    table.escaped,
                 )
-                return rule
+            if rule.action == rule.ACTION_SKIP:
+                continue
+
+            if column in rule.no_columns:
+                logger.debug(
+                    "%s %s depends on %s.%s which is not dumped",
+                    seq.kind,
+                    seq.escaped,
+                    table.escaped,
+                    column,
+                )
+                continue
+
+            if column in rule.replace:
+                logger.debug(
+                    "%s %s depends on %s.%s which is replaced",
+                    seq.kind,
+                    seq.escaped,
+                    table.escaped,
+                    column,
+                )
+                continue
+
+            # we found a table wanting this sequence
+            rule = DumpRule()
+            rule.action = rule.ACTION_DEP
+            logger.debug(
+                "%s %s is needed by matched %s %s",
+                seq.kind,
+                seq.escaped,
+                table.kind,
+                table.escaped,
+            )
+            return rule
 
     def dump_table(self, table, config):
         self._begin_table(table)
