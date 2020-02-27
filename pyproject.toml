@@ -1,17 +1,2 @@
 [tool.black]
 line-length = 79
-
-[tool.tox]
-legacy_tox_ini = """
-
-[tox]
-envlist = py{35,36,37,38}, black
-
-[testenv]
-commands = pytest
-deps = pytest >= 5.3,<6
-
-[testenv:black]
-commands = black --check --diff .
-deps = black
-"""
