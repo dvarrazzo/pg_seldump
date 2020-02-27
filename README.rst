@@ -1,6 +1,10 @@
 PostgreSQL selective data dump
 ==============================
 
+.. image:: https://travis-ci.org/dvarrazzo/pg_seldump.svg?branch=master
+    :target: https://travis-ci.org/dvarrazzo/pg_seldump
+    :alt: Build status
+
 This tool allows to extract data from a PostgreSQL_ database with greater
 flexibility that tools like pg_dump_ allow.
 
