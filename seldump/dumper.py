@@ -20,6 +20,7 @@ class Dumper:
     """
     The logic of a database dump.
     """
+
     def __init__(self, reader, writer):
         self.reader = reader
         self.writer = writer
@@ -89,7 +90,9 @@ class Dumper:
                 )
 
             try:
-                meth = getattr(self.writer, "dump_" + obj.kind.replace(" ", "_"))
+                meth = getattr(
+                    self.writer, "dump_" + obj.kind.replace(" ", "_")
+                )
             except AttributeError:
                 raise DumpError(
                     "don't know how to dump objects of kind %s" % obj.kind
