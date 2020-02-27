@@ -7,10 +7,12 @@ This file is part of pg_seldump.
 
 import logging
 
+from .writer import Writer
+
 logger = logging.getLogger("seldump.dummywriter")
 
 
-class DummyWriter:
+class DummyWriter(Writer):
     def begin_dump(self):
         logger.debug("start of dump")
 

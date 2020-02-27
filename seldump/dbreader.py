@@ -13,13 +13,14 @@ from collections import defaultdict
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
 
-from .exceptions import DumpError
 from .consts import DUMPABLE_KINDS, PG_KINDS
+from .reader import Reader
+from .exceptions import DumpError
 
 logger = logging.getLogger("seldump.dbreader")
 
 
-class DbReader:
+class DbReader(Reader):
     def __init__(self, dsn):
         self.dsn = dsn
 

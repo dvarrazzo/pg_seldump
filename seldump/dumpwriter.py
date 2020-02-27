@@ -14,13 +14,14 @@ from datetime import datetime
 import psycopg2
 from psycopg2 import sql
 
-from .exceptions import DumpError
 from .consts import PROJECT_URL, VERSION
+from .writer import Writer
+from .exceptions import DumpError
 
 logger = logging.getLogger("seldump.dumpwriter")
 
 
-class DumpWriter:
+class DumpWriter(Writer):
     def __init__(self, outfile, reader):
         self.outfile = outfile
         self.reader = reader
