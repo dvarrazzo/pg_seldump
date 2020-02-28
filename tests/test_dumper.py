@@ -105,3 +105,23 @@ def test_sequence_skipped(dumper, details, dumped):
     else:
         assert len(objs) == 1
         assert seq not in objs
+
+
+def test_sequence_skip_override(dumper):
+    dumper.reader.load_db(SAMPLE_DB)
+    tbl = dumper.db.get("public", "table1")
+    seq = dumper.db.get("public", "table1_id_seq")
+    dumper.add_config(
+        {
+            "db_objects": [
+                {"name": "table1"},
+                {"name": "table1_id_seq", "action": "skip"},
+            ]
+        }
+    )
+
+    dumper.perform_dump()
+    objs = [obj for obj, rule in dumper.writer.dumped]
+    assert len(objs) == 1
+    assert seq not in objs
+    assert tbl in objs
