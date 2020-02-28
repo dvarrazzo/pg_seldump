@@ -148,23 +148,23 @@ class Dumper:
             if rule.action == rule.ACTION_SKIP:
                 continue
 
-            if column in rule.no_columns:
+            if column.name in rule.no_columns:
                 logger.debug(
                     "%s %s depends on %s.%s which is not dumped",
                     seq.kind,
                     seq.escaped,
                     table.escaped,
-                    column,
+                    column.name,
                 )
                 continue
 
-            if column in rule.replace:
+            if column.name in rule.replace:
                 logger.debug(
                     "%s %s depends on %s.%s which is replaced",
                     seq.kind,
                     seq.escaped,
                     table.escaped,
-                    column,
+                    column.name,
                 )
                 continue
 

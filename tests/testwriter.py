@@ -5,6 +5,9 @@ class TestWriter(Writer):
     __test__ = False
 
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.dump_started = False
         self.dump_ended = False
         self.closed = False
