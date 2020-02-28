@@ -8,13 +8,13 @@ This file is part of pg_seldump.
 
 import logging
 from functools import lru_cache
-from collections import defaultdict
 
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
 
-from .consts import DUMPABLE_KINDS, PG_KINDS
+from .consts import DUMPABLE_KINDS, KIND_TABLE, KIND_PART_TABLE, REVKINDS
 from .reader import Reader
+from .dbobjects import DbObject, Column
 from .exceptions import DumpError
 
 logger = logging.getLogger("seldump.dbreader")
@@ -22,6 +22,7 @@ logger = logging.getLogger("seldump.dbreader")
 
 class DbReader(Reader):
     def __init__(self, dsn):
+        super().__init__()
         self.dsn = dsn
 
     @property
@@ -45,62 +46,49 @@ class DbReader(Reader):
         """
         return obj.as_string(self.connection)
 
-    @lru_cache(maxsize=1)
-    def get_objects_to_dump(self):
-        rv = []
-        for n in self._get_schemas():
-            rv.extend(self._get_objects_in_schema(n))
-
-        return rv
-
-    @lru_cache(maxsize=1)
-    def _get_schemas(self):
-        logger.debug("looking for schemas")
-        with self.cursor() as cur:
-            # The system catalogs are 'information_schema' and the ones with
-            # 'pg_' prefix: those don't contain any user-defined object.
-            cur.execute(
-                """
-                select n.nspname as name
-                from pg_catalog.pg_namespace n
-                where n.nspname !~ '^pg_'
-                and n.nspname <> 'information_schema'
-                order by n.nspname
-                """
+    def load_schema(self):
+        for rec in self._fetch_objects():
+            obj = DbObject.from_kind(
+                rec.kind,
+                oid=rec.oid,
+                schema=rec.schema,
+                name=rec.name,
+                escaped=rec.escaped,
+                extension=rec.extension,
+                extcondition=rec.extcondition,
             )
-            rv = [r.name for r in cur]
-            logger.debug("found %d schemas", len(rv))
-            return rv
+            self.db.add_object(obj)
 
-    @lru_cache(maxsize=100)
-    def _get_objects_in_schema(self, schema):
+        for rec in self._fetch_columns():
+            table = self.db.get(oid=rec.table_oid)
+            assert table, "no table with oid %s for column %s found" % (
+                rec.table_oid,
+                rec.name,
+            )
+            col = Column(name=rec.name, type=rec.type, escaped=rec.escaped)
+            table.add_column(col)
+
+        for rec in self._fetch_sequences_deps():
+            table = self.db.get(oid=rec.table_oid)
+            assert table, "no table with oid %s for sequence %s found" % (
+                rec.table_oid,
+                rec.seq_oid,
+            )
+            seq = self.db.get(oid=rec.seq_oid)
+            assert seq, "no sequence %s found" % rec.seq_oid
+            self.db.add_sequence_user(seq, table, rec.column)
+
+    def _fetch_objects(self):
+        logger.debug("fetching database objects")
         with self.cursor() as cur:
-            # The list of all the objects of a schema to include in the dump.
-            #
-            # Certain objects don't have a state (e.g. views) or are internal
-            # (e.g. toast tables) so there is nothing to include in a data-only
-            # dump (DUMPABLE_KINDS).
-            #
-            # If an object belongs to an extension (i.e. the pg_class ->
-            # pg_depend -> pg_extension join finds a record), usually it must
-            # not be dumped.
-            #
-            # However extensions can configure certain objects to be dumped. If
-            # so their entry in 'extcondition' will we not null: it can be an
-            # empty string to say all the table must be dumped, or a 'where'
-            # clause specifying what records to dump.
-            #
-            # https://www.postgresql.org/docs/11/extend-extensions.html
-            logger.debug("looking for objects into schema %s", schema)
             cur.execute(
                 """
-select oid, schema, name, kind, condition, escaped from (
 select
     r.oid as oid,
-    n.nspname as schema,
+    s.nspname as schema,
     r.relname as name,
     r.relkind as kind,
-    pg_catalog.format('%%I.%%I', n.nspname, r.relname)
+    pg_catalog.format('%%I.%%I', s.nspname, r.relname)
         as escaped,
 
     e.extname as extension,
@@ -114,43 +102,22 @@ select
             from (select unnest(extconfig)) t0
         ) t1
         where unnest = r.oid
-    ) as condition
+    ) as extcondition
 from pg_class r
-join pg_namespace n on n.oid = r.relnamespace
+join pg_namespace s on s.oid = r.relnamespace
 left join pg_depend d on d.objid = r.oid and d.deptype = 'e'
 left join pg_extension e on d.refobjid = e.oid
 where r.relkind = any(%(stateless)s)
-and n.nspname = %(schema)s
-order by r.relname
-) x
-where extension is null
-or condition is not null
+and s.nspname != 'information_schema'
+and s.nspname !~ '^pg_'
+order by s.nspname, r.relname
 """,
-                {"schema": schema, "stateless": list(DUMPABLE_KINDS)},
+                {"stateless": list(DUMPABLE_KINDS)},
             )
+            return cur.fetchall()
 
-            # Replace the kind from the single letter in pg_catalog to a
-            # more descriptive string.
-            return [r._replace(kind=PG_KINDS[r.kind]) for r in cur]
-
-    @property
-    @lru_cache(maxsize=1)
-    def objects_map(self):
-        logger.debug("building objects map")
-        rv = {}
-        for obj in self.get_objects_to_dump():
-            assert obj.oid not in rv
-            rv[obj.oid] = obj
-
-        return rv
-
-    @lru_cache(maxsize=1)
-    def _get_sequences_deps(self):
-        """
-        Return a map seq_oid -> [(table_oid, col_name)...] of sequence deps
-        """
-        rv = defaultdict(list)
-        logger.debug("querying sequence dependencies")
+    def _fetch_sequences_deps(self):
+        logger.debug("fetching sequences dependencies")
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -166,38 +133,31 @@ join pg_class seq
     and seq.relkind = 'S'
 """
             )
-            for rec in cur:
-                rv[rec.seq_oid].append((rec.table_oid, rec.column))
+            return cur.fetchall()
 
-        return rv
-
-    @lru_cache(maxsize=1000)
-    def get_tables_using_sequence(self, oid):
-        seqdeps = self._get_sequences_deps()
-        rv = []
-        for (table_oid, column) in seqdeps.get(oid, ()):
-            table = self.objects_map.get(table_oid)
-            if table is not None:
-                rv.append((table, column))
-
-        return rv
-
-    def get_columns(self, table_escaped):
-        """
-        Reture the list of columns in a relation
-        """
+    def _fetch_columns(self):
+        logger.debug("fetching columns")
         with self.cursor() as cur:
             # attnum gives their order; attnum < 0 are system columns
             # attisdropped flags a dropped column.
             cur.execute(
                 """
-                select attname as name, quote_ident(attname) as escaped
-                from pg_attribute
-                where attrelid = %s::regclass
-                and attnum > 0 and not attisdropped
-                order by attnum
+select
+    attrelid as table_oid,
+    attname as name,
+    atttypid::regtype as type,
+    quote_ident(attname) as escaped
+from pg_attribute a
+join pg_class r on r.oid = a.attrelid
+join pg_namespace s on s.oid = r.relnamespace
+where r.relkind = any(%(kinds)s)
+and a.attnum > 0
+and not attisdropped
+and s.nspname != 'information_schema'
+and s.nspname !~ '^pg_'
+order by a.attrelid, a.attnum
                 """,
-                (table_escaped,),
+                {"kinds": [REVKINDS[KIND_TABLE], REVKINDS[KIND_PART_TABLE]]},
             )
             return cur.fetchall()
 

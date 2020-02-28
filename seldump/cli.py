@@ -56,6 +56,7 @@ def main():
         dumper.writer = writer
 
     try:
+        reader.load_schema()
         dumper.perform_dump()
     finally:
         writer.close()

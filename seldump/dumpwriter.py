@@ -59,8 +59,6 @@ class DumpWriter(Writer):
             )
 
     def _copy_table(self, table, config):
-        table_cols = self.reader.get_columns(table.escaped)
-
         no_columns = set(config.no_columns)
         replace = config.replace.copy()
 
@@ -70,7 +68,7 @@ class DumpWriter(Writer):
 
         attrs_in = []
         attrs_out = []
-        for col in table_cols:
+        for col in table.columns:
             if col.name in no_columns:
                 no_columns.remove(col.name)
                 continue
@@ -125,8 +123,10 @@ class DumpWriter(Writer):
 
     def _get_table_condition(self, table, config):
         conds = []
-        if table.condition:
-            conds.append(re.replace(r"(?i)^\s*where\s+", table.condition, ""))
+        if table.extcondition:
+            conds.append(
+                re.replace(r"(?i)^\s*where\s+", table.extcondition, "")
+            )
         if config.filter:
             conds.append(config.filter)
 

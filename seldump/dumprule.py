@@ -106,8 +106,11 @@ class DumpRule:
         Return a new DumpRule from a YAML content.
         """
         rv = cls()
-        rv.filename = cfg.filename
-        rv.lineno = cfg.lineno
+
+        if hasattr(cfg, "filename"):
+            # Not a normal dict but a thing with a position
+            rv.filename = cfg.filename
+            rv.lineno = cfg.lineno
 
         if not isinstance(cfg, dict):
             raise ConfigError("expected config dictionary, got %s" % cfg)

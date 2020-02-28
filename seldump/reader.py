@@ -6,7 +6,9 @@ Readers base class
 This file is part of pg_seldump.
 """
 
-from abc import ABC
+from abc import ABC, abstractmethod
+
+from seldump.database import Database
 
 
 class Reader(ABC):
@@ -14,8 +16,9 @@ class Reader(ABC):
     The base class of an object to read e db to dump.
     """
 
-    def get_objects_to_dump(self):
-        pass
+    def __init__(self):
+        self.db = Database()
 
-    def get_tables_using_sequence(self, oid):
+    @abstractmethod
+    def load_schema(self):
         pass

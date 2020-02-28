@@ -11,7 +11,7 @@ from operator import attrgetter
 
 from .exceptions import ConfigError, DumpError
 from .dumprule import DumpRule
-from .consts import KIND_MATVIEW, KIND_SEQUENCE
+from .dbobjects import MaterializedView, Sequence
 
 logger = logging.getLogger("seldump.dumper")
 
@@ -61,8 +61,8 @@ class Dumper:
         objs = []
         matviews = []
 
-        for obj in self.reader.get_objects_to_dump():
-            if obj.kind == KIND_MATVIEW:
+        for obj in self.reader.db:
+            if isinstance(obj, MaterializedView):
                 matviews.append(obj)
             else:
                 objs.append(obj)
@@ -70,23 +70,30 @@ class Dumper:
         self.writer.begin_dump()
 
         for obj in objs + matviews:
+            if obj.extension is not None and obj.extcondition is None:
+                logger.debug(
+                    "%s %s in extension %s has no dump condition: skipping",
+                    obj.kind,
+                    obj,
+                    obj.extension,
+                )
+                continue
+
             rule = self.get_rule(obj)
             if rule is None:
                 logger.debug(
-                    "%s %s doesn't match any rule: skipping",
-                    obj.kind,
-                    obj.escaped,
+                    "%s %s doesn't match any rule: skipping", obj.kind, obj,
                 )
                 continue
 
             if rule.action == rule.ACTION_SKIP:
-                logger.debug("skipping %s %s", obj.kind, obj.escaped)
+                logger.debug("skipping %s %s", obj.kind, obj)
                 continue
 
             elif rule.action == rule.ACTION_ERROR:
                 raise DumpError(
                     "%s %s matches the error rule at %s"
-                    % (obj.kind, obj.escaped, rule.pos)
+                    % (obj.kind, obj, rule.pos)
                 )
 
             try:
@@ -115,11 +122,11 @@ class Dumper:
 
         # If not found, maybe it's a sequence used by a table dumped anyway
         # in such case we want to dump it
-        if obj.kind == KIND_SEQUENCE:
+        if isinstance(obj, Sequence):
             return self._get_sequence_dependency_rule(obj)
 
     def _get_sequence_dependency_rule(self, seq):
-        for table, column in self.reader.get_tables_using_sequence(seq.oid):
+        for table, column in self.reader.db.get_tables_using_sequence(seq.oid):
             rule = self.get_object_rule(table)
             if rule is None:
                 continue
