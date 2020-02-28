@@ -1,58 +1,20 @@
 import pytest
 
-from seldump.dumper import Dumper
 from seldump.dbobjects import Table, Sequence
+from seldump.exceptions import ConfigError
 
-from .testreader import TestReader
-from .testwriter import TestWriter
-
-
-@pytest.fixture
-def dumper():
-    """Return a `seldump.Dumper` configured for testing."""
-    reader = TestReader()
-    writer = TestWriter()
-    dumper = Dumper(reader=reader, writer=writer)
-    return dumper
+from .sample_dbs import create_sample_db
 
 
 def test_void(dumper):
-    """
-    On empty input, result is empty
-    """
+    """On empty input, result is empty."""
     dumper.perform_dump()
     assert not dumper.writer.dumped
 
 
-SAMPLE_DB = {
-    "table1": {
-        "columns": [
-            {
-                "name": "id",
-                "type": "integer",
-                "use_sequence": "table1_id_seq",
-            },
-            {"name": "data", "type": "text"},
-        ],
-    },
-    "table2": {
-        "columns": [
-            {
-                "name": "id",
-                "type": "integer",
-                "use_sequence": "table2_id_seq",
-            },
-            {"name": "data", "type": "text"},
-        ],
-    },
-}
-
-
 def test_one_table(dumper):
-    """
-    You can select a single table to dump
-    """
-    dumper.reader.load_db(SAMPLE_DB)
+    """You can select a single table to dump."""
+    dumper.reader.load_db(create_sample_db(2))
     dumper.add_config({"db_objects": [{"name": "table1"}]})
     dumper.perform_dump()
 
@@ -75,53 +37,71 @@ def test_one_table(dumper):
     assert obj not in objs
 
 
-@pytest.mark.parametrize(
-    "details, dumped",
-    [
-        ({}, True),
-        ({"no_columns": ["data"]}, True),
-        ({"no_columns": ["id"]}, False),
-        ({"replace": {"data": "NULL"}}, True),
-        ({"replace": {"id": "NULL"}}, False),
-    ],
-)
-def test_sequence_skipped(dumper, details, dumped):
-    dumper.reader.load_db(SAMPLE_DB)
-
-    tbl = dumper.db.get("public", "table1")
-    assert isinstance(tbl, Table)
-    seq = dumper.db.get("public", "table1_id_seq")
-    assert isinstance(seq, Sequence)
-
-    conf = {"name": "table1"}
-    conf.update(details)
-    dumper.add_config({"db_objects": [conf]})
+@pytest.mark.parametrize("spec", ["^table[13]$", ["table1", "table3"]])
+def test_names(dumper, spec):
+    """Tables can be selected by names regexp or list"""
+    dumper.reader.load_db(create_sample_db(3))
+    dumper.add_config({"db_objects": [{"names": spec}]})
     dumper.perform_dump()
-    objs = [obj for obj, rule in dumper.writer.dumped]
-    assert tbl in objs
-    if dumped:
-        assert len(objs) == 2
-        assert seq in objs
-    else:
-        assert len(objs) == 1
-        assert seq not in objs
+
+    tables = [
+        obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)
+    ]
+    assert len(tables) == 2
+    assert dumper.db.get("public", "table1") in tables
+    assert dumper.db.get("public", "table2") not in tables
+    assert dumper.db.get("public", "table3") in tables
 
 
-def test_sequence_skip_override(dumper):
-    dumper.reader.load_db(SAMPLE_DB)
-    tbl = dumper.db.get("public", "table1")
-    seq = dumper.db.get("public", "table1_id_seq")
+def test_name_over_names_regexp(dumper):
+    """A specified name overrides a names regexp"""
+    dumper.reader.load_db(create_sample_db(3))
     dumper.add_config(
         {
             "db_objects": [
-                {"name": "table1"},
-                {"name": "table1_id_seq", "action": "skip"},
+                {"name": "table2", "action": "skip"},
+                {"names": "^table.$"},
             ]
         }
     )
+    dumper.perform_dump()
+
+    tables = [
+        obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)
+    ]
+    assert len(tables) == 2
+    assert dumper.db.get("public", "table1") in tables
+    assert dumper.db.get("public", "table2") not in tables
+    assert dumper.db.get("public", "table3") in tables
+
+
+@pytest.mark.parametrize("bias", [-1, 0, 1])
+def test_name_same_as_names_list(dumper, bias):
+    """List of names have the same precedence over a single name"""
+    dumper.reader.load_db(create_sample_db(2))
+    dumper.add_config(
+        {
+            "db_objects": [
+                {"name": "table2", "action": "skip", "adjust_score": bias},
+                {"names": ["table1", "table2"]},
+            ]
+        }
+    )
+    if bias == 0:
+        with pytest.raises(ConfigError):
+            dumper.perform_dump()
+        return
 
     dumper.perform_dump()
-    objs = [obj for obj, rule in dumper.writer.dumped]
-    assert len(objs) == 1
-    assert seq not in objs
-    assert tbl in objs
+
+    tables = [
+        obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)
+    ]
+    assert dumper.db.get("public", "table1") in tables
+
+    if bias < 0:
+        assert len(tables) == 2
+        assert dumper.db.get("public", "table2") in tables
+    else:
+        assert len(tables) == 1
+        assert dumper.db.get("public", "table2") not in tables
