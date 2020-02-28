@@ -45,7 +45,7 @@ def test_sequence_skip_override(dumper):
         {
             "db_objects": [
                 {"name": "table1"},
-                {"name": "table1_id_seq", "action": "skip"},
+                {"kind": "sequence", "action": "skip"},
             ]
         }
     )
