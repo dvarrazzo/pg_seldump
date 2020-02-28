@@ -100,12 +100,19 @@ class DbObject:
 class Table(DbObject):
     """A table in a database."""
 
-    __slots__ = DbObject.__slots__ + ("_columns", "_cols_by_name",)
+    __slots__ = DbObject.__slots__ + (
+        "columns",
+        "_cols_by_name",
+        "fkeys",
+        "ref_fkeys",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._columns = []
+        self.columns = []
         self._cols_by_name = {}
+        self.fkeys = []
+        self.ref_fkeys = []
 
     def add_column(self, column):
         if column.name in self._cols_by_name:
@@ -113,15 +120,30 @@ class Table(DbObject):
                 "the table %s has already a column called %s"
                 % (self, column.name)
             )
-        self._columns.append(column)
+        self.columns.append(column)
         self._cols_by_name[column.name] = column
-
-    @property
-    def columns(self):
-        return self._columns[:]
 
     def get_column(self, name):
         return self._cols_by_name.get(name)
+
+    def add_fkey(self, fkey):
+        for col in fkey.table_cols:
+            # using format because https://github.com/psf/black/issues/1259
+            assert (
+                col in self._cols_by_name
+            ), "column {} in fkey {} is not in the table {}".format(
+                col, fkey, self,
+            )
+        self.fkeys.append(fkey)
+
+    def add_ref_fkey(self, fkey):
+        for col in fkey.ftable_cols:
+            assert (
+                col in self._cols_by_name
+            ), "column {} in fkey {} is not in the table {}".format(
+                col, fkey, self,
+            )
+        self.ref_fkeys.append(fkey)
 
 
 @DbObject.register(consts.KIND_PART_TABLE)
@@ -164,3 +186,27 @@ class Column:
         if not seq.oid:
             raise ValueError("the sequence %s must have an oid" % seq)
         self.used_sequence_oids.append(seq.oid)
+
+
+class ForeignKey:
+    __slots__ = (
+        "name",
+        "table_oid",
+        "table_cols",
+        "ftable_oid",
+        "ftable_cols",
+    )
+
+    def __init__(self, name, table_oid, table_cols, ftable_oid, ftable_cols):
+        self.name = name
+        self.table_oid = table_oid
+        self.table_cols = table_cols
+        self.ftable_oid = ftable_oid
+        self.ftable_cols = ftable_cols
+
+    def __repr__(self):
+        return "<%s %s at 0x%x>" % (
+            self.__class__.__name__,
+            self.name,
+            id(self),
+        )

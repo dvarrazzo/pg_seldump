@@ -14,7 +14,7 @@ from psycopg2.extras import NamedTupleCursor
 
 from .consts import DUMPABLE_KINDS, KIND_TABLE, KIND_PART_TABLE, REVKINDS
 from .reader import Reader
-from .dbobjects import DbObject, Column
+from .dbobjects import DbObject, Column, ForeignKey
 from .exceptions import DumpError
 
 logger = logging.getLogger("seldump.dbreader")
@@ -67,6 +67,27 @@ class DbReader(Reader):
             )
             col = Column(name=rec.name, type=rec.type, escaped=rec.escaped)
             table.add_column(col)
+
+        for rec in self._fetch_fkeys():
+            table = self.db.get(oid=rec.table_oid)
+            assert table, "no table with oid %s for foreign key %s found" % (
+                rec.table_oid,
+                rec.name,
+            )
+            ftable = self.db.get(oid=rec.ftable_oid)
+            assert ftable, "no table with oid %s for foreign key %s found" % (
+                rec.ftable_oid,
+                rec.name,
+            )
+            fkey = ForeignKey(
+                name=rec.name,
+                table_oid=rec.table_oid,
+                table_cols=rec.table_cols,
+                ftable_oid=rec.ftable_oid,
+                ftable_cols=rec.ftable_cols,
+            )
+            table.add_fkey(fkey)
+            ftable.add_ref_fkey(fkey)
 
         for rec in self._fetch_sequences_deps():
             table = self.db.get(oid=rec.table_oid)
@@ -158,6 +179,38 @@ and s.nspname !~ '^pg_'
 order by a.attrelid, a.attnum
                 """,
                 {"kinds": [REVKINDS[KIND_TABLE], REVKINDS[KIND_PART_TABLE]]},
+            )
+            return cur.fetchall()
+
+    def _fetch_fkeys(self):
+        logger.debug("fetching sequences dependencies")
+        with self.cursor() as cur:
+            cur.execute(
+                """
+select
+    c.conname as name,
+    c.conrelid as table_oid,
+    array_agg(ra.attname) as table_cols,
+    c.confrelid as ftable_oid,
+    array_agg(fa.attname) as ftable_cols
+from pg_constraint c
+join (
+    select oid, generate_series(1, array_length(conkey,1)) as attidx
+    from pg_constraint
+    where contype = 'f') exp on c.oid = exp.oid
+join pg_attribute ra
+    on (ra.attrelid, ra.attnum) = (c.conrelid, c.conkey[exp.attidx])
+join pg_attribute fa
+    on (fa.attrelid, fa.attnum) = (c.confrelid, c.confkey[exp.attidx])
+join pg_class r on c.conrelid = r.oid
+join pg_namespace rs on rs.oid = r.relnamespace
+join pg_class fr on c.confrelid = fr.oid
+join pg_namespace fs on fs.oid = fr.relnamespace
+where rs.nspname != 'information_schema' and rs.nspname !~ '^pg_'
+and   fs.nspname != 'information_schema' and fs.nspname !~ '^pg_'
+group by 1, 2, 4
+order by name
+"""
             )
             return cur.fetchall()
 
