@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from seldump.reader import Reader
-from seldump.dbobjects import DbObject, Column, Sequence
+from seldump.dbobjects import DbObject, Column, Sequence, ForeignKey
 
 
 class TestReader(Reader):
@@ -33,8 +33,7 @@ class TestReader(Reader):
 
             dbobj = DbObject.from_kind(kind, oid, schema, name)
             if "columns" in obj:
-                for col in obj["columns"]:
-                    colname = col["name"]
+                for colname, col in obj["columns"].items():
                     coltype = col["type"]
                     dbcol = Column(name=colname, type=coltype)
                     dbobj.add_column(dbcol)
@@ -47,14 +46,34 @@ class TestReader(Reader):
             self.db.add_object(dbobj)
 
         # create sequence if needed, attach them to columns
-        for (schema, name), objs in used_seqs.items():
+        for (schema, name), dbobjs in used_seqs.items():
             seq = self.db.get(schema, name, cls=Sequence)
             if seq is None:
                 seq = Sequence(self.get_oid(), schema, name)
                 self.db.add_object(seq)
 
-            for obj, col in objs:
+            for obj, col in dbobjs:
                 self.db.add_sequence_user(seq, obj, col.name)
+
+        # create fkeys
+        for name1, obj in objs.items():
+            if not obj.get("fkeys"):
+                continue
+            # TODO: other schemas
+            t1 = self.db.get("public", name1)
+            assert t1
+            for fkey in obj["fkeys"]:
+                # TODO: other schemas
+                t2 = self.db.get("public", fkey["ftable"])
+                fkey = ForeignKey(
+                    name=fkey["name"],
+                    table_oid=t1.oid,
+                    table_cols=fkey["cols"],
+                    ftable_oid=t2.oid,
+                    ftable_cols=fkey["fcols"],
+                )
+                t1.add_fkey(fkey)
+                t2.add_ref_fkey(fkey)
 
     def get_oid(self):
         oid = self.last_oid
