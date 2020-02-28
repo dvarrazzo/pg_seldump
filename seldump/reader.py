@@ -8,8 +8,6 @@ This file is part of pg_seldump.
 
 from abc import ABC, abstractmethod
 
-from seldump.database import Database
-
 
 class Reader(ABC):
     """
@@ -17,7 +15,7 @@ class Reader(ABC):
     """
 
     def __init__(self):
-        self.db = Database()
+        self.db = None
 
     @abstractmethod
     def load_schema(self):

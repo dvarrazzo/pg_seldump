@@ -10,6 +10,7 @@ import logging
 from operator import attrgetter
 
 from .exceptions import ConfigError, DumpError
+from .database import Database
 from .dumprule import DumpRule
 from .dbobjects import MaterializedView, Sequence
 
@@ -22,7 +23,9 @@ class Dumper:
     """
 
     def __init__(self, reader, writer):
+        self.db = Database()
         self.reader = reader
+        self.reader.db = self.db
         self.writer = writer
         self.rules = []
 
@@ -61,7 +64,7 @@ class Dumper:
         objs = []
         matviews = []
 
-        for obj in self.reader.db:
+        for obj in self.db:
             if isinstance(obj, MaterializedView):
                 matviews.append(obj)
             else:
@@ -126,7 +129,7 @@ class Dumper:
             return self._get_sequence_dependency_rule(obj)
 
     def _get_sequence_dependency_rule(self, seq):
-        for table, column in self.reader.db.get_tables_using_sequence(seq.oid):
+        for table, column in self.db.get_tables_using_sequence(seq.oid):
             rule = self.get_object_rule(table)
             if rule is None:
                 continue
