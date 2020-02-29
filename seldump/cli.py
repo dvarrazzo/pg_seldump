@@ -10,13 +10,13 @@ import logging
 from signal import SIGPIPE
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
+from .config import load_config
 from .consts import VERSION
 from .dumper import Dumper
 from .dbreader import DbReader
 from .dumpwriter import DumpWriter
 from .dummywriter import DummyWriter
 from .exceptions import SelDumpException, ConfigError
-from .yaml import load_yaml
 
 logger = logging.getLogger("seldump")
 
@@ -33,13 +33,14 @@ def main():
     reader = DbReader(opt.dsn)
     dumper = Dumper(reader=reader, writer=writer)
 
-    for fn in opt.config_files:
-        try:
-            cfg = load_yaml(fn)
-        except Exception as e:
-            raise ConfigError("error loading config file: %s" % e)
-        else:
-            dumper.add_config(cfg)
+    # Parse all the config files and look for all the errors.
+    # Bail out if there is any error
+    confs = [load_config(fn) for fn in opt.config_files]
+    if [conf for conf in confs if conf is None]:
+        return 1
+
+    for conf in confs:
+        dumper.add_config(conf)
 
     if not opt.test:
         if opt.outfile != "-":

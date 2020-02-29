@@ -10,9 +10,6 @@ import re
 import logging
 from functools import lru_cache
 
-from .consts import REVKINDS, DUMPABLE_KINDS
-from .exceptions import ConfigError
-
 logger = logging.getLogger("seldump.dumprule")
 
 
@@ -107,161 +104,43 @@ class DumpRule:
         """
         rv = cls()
 
-        if hasattr(cfg, "filename"):
-            # Not a normal dict but a thing with a position
-            rv.filename = cfg.filename
-            rv.lineno = cfg.lineno
-
-        if not isinstance(cfg, dict):
-            raise ConfigError("expected config dictionary, got %s" % cfg)
-
-        if "name" in cfg and "names" in cfg:
-            raise ConfigError(
-                "can't specify both 'name' and 'names', at %s" % rv.pos
-            )
-
         if "name" in cfg:
-            if not isinstance(cfg["name"], str):
-                raise ConfigError("'name' should be a string, at %s" % rv.pos)
             rv.names.add(cfg["name"])
 
         if "names" in cfg:
-            if isinstance(cfg["names"], list) and all(
-                isinstance(name, str) for name in cfg["names"]
-            ):
+            if isinstance(cfg["names"], list):
                 rv.names.update(cfg["names"])
-            elif isinstance(cfg["names"], str):
-                try:
-                    rv.names_re = re.compile(cfg["names"], re.VERBOSE)
-                except re.error as e:
-                    raise ConfigError(
-                        "'names' is not a valid regular expression: %s,"
-                        " at %s" % (e, rv.pos)
-                    )
             else:
-                raise ConfigError(
-                    "'names' should be a list of strings or a"
-                    " regular expression, at %s" % rv.pos
-                )
-
-        if "schema" in cfg and "schemas" in cfg:
-            raise ConfigError(
-                "can't specify both 'schema' and 'schemas', at %s" % rv.pos
-            )
+                rv.names_re = re.compile(cfg["names"], re.VERBOSE)
 
         if "schema" in cfg:
-            if not isinstance(cfg["schema"], str):
-                raise ConfigError(
-                    "'schema' should be a string, at %s" % rv.pos
-                )
             rv.schemas.add(cfg["schema"])
 
         if "schemas" in cfg:
-            if isinstance(cfg["schemas"], list) and all(
-                isinstance(name, str) for name in cfg["schemas"]
-            ):
+            if isinstance(cfg["schemas"], list):
                 rv.schemas.update(cfg["schemas"])
-            elif isinstance(cfg["schemas"], str):
-                try:
-                    rv.schemas_re = re.compile(cfg["schemas"], re.VERBOSE)
-                except re.error as e:
-                    raise ConfigError(
-                        "'schemas' is not a valid regular expression: %s,"
-                        " at %s" % (e, rv.pos)
-                    )
             else:
-                raise ConfigError(
-                    "'schemas' should be a list of strings or"
-                    " a regular expression, at %s" % rv.pos
-                )
-
-        if "kind" in cfg and "kinds" in cfg:
-            raise ConfigError(
-                "can't specify both 'kind' and 'kinds', at %s" % rv.pos
-            )
+                rv.schemas_re = re.compile(cfg["schemas"], re.VERBOSE)
 
         if "kind" in cfg:
-            rv._check_kind(cfg["kind"])
             rv.kinds.add(cfg["kind"])
 
         if "kinds" in cfg:
-            if not isinstance(cfg["kinds"], list):
-                raise ConfigError(
-                    "'kinds' must be a list of strings, at %s" % rv.pos
-                )
-            for k in cfg["kinds"]:
-                rv._check_kind(k)
             rv.kinds.update(cfg["kinds"])
 
         if "action" in cfg:
-            if str(cfg["action"]).lower() not in DumpRule.ACTIONS:
-                actions = ", ".join(DumpRule.ACTIONS)
-                raise ConfigError(
-                    "bad 'action': '%s'; accepted values are %s, at %s"
-                    % (cfg["action"], actions, rv.pos)
-                )
             rv.action = cfg["action"].lower()
 
-        if "skip" in cfg:
-            if "action" in cfg:
-                raise ConfigError(
-                    "can't specify both 'skip' and 'action', at %s" % rv.pos
-                )
-            rv.action = "skip" if cfg["skip"] else "dump"
-
         if "no_columns" in cfg:
-            if not (
-                isinstance(cfg["no_columns"], list)
-                and all(isinstance(col, str) for col in cfg["no_columns"])
-            ):
-                raise ConfigError(
-                    "'no_columns' must be a list of strings, at %s" % rv.pos
-                )
             rv.no_columns = cfg["no_columns"]
 
         if "replace" in cfg:
-            if not (
-                isinstance(cfg["replace"], dict)
-                and all(isinstance(col, str) for col in cfg["replace"].keys())
-                and all(
-                    isinstance(expr, str) for expr in cfg["replace"].values()
-                )
-            ):
-                raise ConfigError(
-                    "'replace' must be a dictionary of strings, at %s" % rv.pos
-                )
             rv.replace = cfg["replace"]
 
         if "filter" in cfg:
-            if not isinstance(cfg["filter"], str):
-                raise ConfigError("'filter' must be a string, at %s" % rv.pos)
             rv.filter = cfg["filter"]
 
         if "adjust_score" in cfg:
-            if not isinstance(cfg["adjust_score"], (int, float)):
-                raise ConfigError(
-                    "'adjust_score' must be a number, at %s" % rv.pos
-                )
             rv.adjust_score = cfg["adjust_score"]
 
-        unks = set(cfg) - set(
-            """
-            name names schema schemas kind kinds
-            action no_columns replace filter skip adjust_score
-            """.split()
-        )
-        if unks:
-            unks = ", ".join(sorted(unks))
-            logger.warning("unknown config option(s): %s, at %s", unks, rv.pos)
-
         return rv
-
-    def _check_kind(self, k):
-        if not isinstance(k, str) or REVKINDS.get(k) not in DUMPABLE_KINDS:
-            kinds = ", ".join(
-                sorted(k for k, v in REVKINDS.items() if v in DUMPABLE_KINDS)
-            )
-            raise ConfigError(
-                "bad 'kind': '%s'; accepted values are: %s, at %s"
-                % (k, kinds, self.pos)
-            )

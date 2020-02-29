@@ -4,7 +4,7 @@ Program constants.
 This file is part of pg_seldump.
 """
 
-VERSION = "0.2.1.dev0"
+VERSION = "0.3.dev0"
 PROJECT_URL = "https://github.com/dvarrazzo/pg_seldump"
 
 

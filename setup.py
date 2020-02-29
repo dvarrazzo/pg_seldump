@@ -10,7 +10,7 @@ pg_seldump -- setup script
 
 import re
 import os
-from setuptools import setup, find_packages
+from setuptools import setup
 
 # Grab the version without importing the module
 # or we will get import errors on install if prerequisites are still missing
@@ -44,11 +44,10 @@ Topic :: System :: Systems Administration
 Topic :: Utilities
 """
 
-# PyYAML version is relatively strict because we override internal interfaces.
-# Test before allowing a larger range.
 requirements = """
 psycopg2
-PyYAML>=5.3,<5.4
+jsonschema>=3.2,<3.3
+PyYAML>=3,<5.4
 """
 
 setup(
@@ -61,7 +60,8 @@ setup(
     license="BSD",
     python_requires=">=3.5",
     install_requires=requirements,
-    packages=find_packages(),
+    packages=["seldump"],
+    package_data={"seldump": ["schema/*.yaml"]},
     entry_points={"console_scripts": ["pg_seldump = seldump.cli:script"]},
     classifiers=[x for x in classifiers.split("\n") if x],
     zip_safe=False,

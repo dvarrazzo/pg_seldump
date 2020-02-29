@@ -1,0 +1,99 @@
+title: database objects dump configuration
+$id: https://www.varrazzo.com/pg_seldump/schema/config.yaml
+$schema: http://json-schema.org/draft-07/schema#
+
+description: An array of rule regulating what database objects must be dumped.
+type: object
+properties:
+  db_objects:
+    type: array
+    items:
+      $ref: '#/definitions/rule'
+
+required:
+- db_objects
+additionalProperties: false
+
+definitions:
+  rule:
+    type: object
+    additionalProperties: false
+    properties:
+
+      name:
+        description: The name of one object to match
+        type: string
+
+      names:
+        description: >
+          Regular expression or list of names of the objects to match
+        anyOf:
+        - type: string
+        - type: array
+          items:
+            type: string
+          uniqueItems: true
+          minItems: 1
+
+      schema:
+        description: The name of the schema of the objects to match
+        type: string
+
+      schemas:
+        description: >
+          Regular expression or list of names of the schemas of the objects
+          to match
+        anyOf:
+        - type: string
+        - type: array
+          items:
+            type: string
+          uniqueItems: true
+          minItems: 1
+
+      kind:
+        description: The kind of the objects to match
+        $ref: '#/definitions/kinds'
+
+      kinds:
+        description: Possible kinds of objects to match
+        type: array
+        uniqueItems: true
+        minItems: 1
+        items:
+          $ref: '#/definitions/kinds'
+
+      adjust_score:
+        description: Adjustiment to the matched score to break tie.
+        type: integer
+
+      action:
+        description: The operation to perform on matching objects.
+        enum:
+          - dump
+          - skip
+          - error
+
+      no_columns:
+        description: List of columns to omit from the output.
+        type: array
+        items:
+          type: string
+
+      filter:
+        description: Only emit the records matching the condition.
+        type: string
+
+      replace:
+        description: Replace certain columns with a specified expression.
+        type: object
+        patternProperties:
+          ".":
+            type: string
+
+  kinds:
+    enum:
+    - table
+    - sequence
+    - partitioned table
+    - materialized view
