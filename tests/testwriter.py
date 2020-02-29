@@ -25,23 +25,23 @@ class TestWriter(Writer):
         assert not self.closed
         self.dump_ended = True
 
-    def dump_table(self, table, config):
+    def dump_table(self, table, action):
         assert self.dump_started
         assert not self.dump_ended
         assert not self.closed
-        self.dumped.append((table, config))
+        self.dumped.append((table, action))
 
-    def dump_sequence(self, seq, config):
+    def dump_sequence(self, seq, action):
         assert self.dump_started
         assert not self.dump_ended
         assert not self.closed
-        self.dumped.append((seq, config))
+        self.dumped.append((seq, action))
 
-    def dump_materialized_view(self, matview, config):
+    def dump_materialized_view(self, matview, action):
         assert self.dump_started
         assert not self.dump_ended
         assert not self.closed
-        self.dumped.append((matview, config))
+        self.dumped.append((matview, action))
 
     def close(self):
         assert self.dump_started == self.dump_ended

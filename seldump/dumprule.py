@@ -24,10 +24,7 @@ class DumpRule:
     ACTION_DUMP = "dump"
     ACTION_SKIP = "skip"
     ACTION_ERROR = "error"
-    ACTION_DEP = "dep"
-
-    # The actions that can be chosen in the config file
-    ACTIONS = [ACTION_DUMP, ACTION_SKIP, ACTION_ERROR]
+    ACTION_REFERENCED = "ref"
 
     def __init__(
         self,
@@ -150,3 +147,33 @@ class DumpRule:
             return False
 
         return True
+
+
+class Action:
+    """
+    An action to apply to a database object.
+
+    The object is closely connected to a DumpRule, but it extends on that,
+    defining an operation taking into account the state of the database too.
+    """
+
+    ACTION_DUMP = DumpRule.ACTION_DUMP
+    ACTION_SKIP = DumpRule.ACTION_SKIP
+    ACTION_ERROR = DumpRule.ACTION_ERROR
+    ACTION_REFERENCED = DumpRule.ACTION_REFERENCED
+    ACTION_UNKNOWN = "unknown"
+
+    def __init__(self, obj, rule=None, action=None):
+        self.obj = obj
+        self.rule = rule
+
+        if rule is not None:
+            self.action = rule.action
+            self.no_columns = rule.no_columns
+            self.replace = rule.replace
+            self.filter = rule.filter
+        else:
+            self.action = action or self.ACTION_UNKNOWN
+            self.no_columns = []
+            self.replace = {}
+            self.filter = None

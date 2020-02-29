@@ -11,7 +11,7 @@ from operator import attrgetter
 
 from .exceptions import ConfigError, DumpError
 from .database import Database
-from .dumprule import DumpRule
+from .dumprule import Action, DumpRule
 from .dbobjects import MaterializedView, Sequence
 
 logger = logging.getLogger("seldump.dumper")
@@ -28,6 +28,7 @@ class Dumper:
         self.reader.db = self.db
         self.writer = writer
         self.rules = []
+        self.actions = {}
 
     def add_config(self, cfg):
         """
@@ -58,45 +59,78 @@ class Dumper:
         Read schema and data from the reader, apply the configured rule,
         use the writer to emit dump data.
         """
+        self.gather_actions()
+        self.apply_actions()
+
+    def gather_actions(self):
+        self.actions.clear()
+
+        # Associate an action to every object of the database
+        for obj in self.db:
+            assert obj.oid, "by now, every object should have an oid"
+            assert obj.oid not in self.actions, "oid {} is duplicate".format(
+                obj.oid
+            )
+            action = self.get_object_action(obj)
+            self.actions[obj.oid] = action
+
+        # Find unmentioned sequences and check if any table depend on them
+        for obj in self.db:
+            if not isinstance(obj, Sequence):
+                continue
+            if self.actions[obj.oid].action != Action.ACTION_UNKNOWN:
+                continue
+            action = self._get_sequence_dependency_action(obj)
+            if action is not None:
+                self.actions[obj.oid] = action
+
+    def apply_actions(self):
         # Refresh the materialized views at the end.
         # TODO: actually they should be dumped in dependency order.
         objs = []
         matviews = []
+        errors = []
 
         for obj in self.db:
+            action = self.actions[obj.oid]
+            if action.action == Action.ACTION_ERROR:
+                errors.append(action)
+
             if isinstance(obj, MaterializedView):
                 matviews.append(obj)
             else:
                 objs.append(obj)
 
+        objs.extend(matviews)
+
+        if errors:
+            objs = [action.obj for action in errors]
+            if len(errors) <= 10:
+                others = []
+            else:
+                obj, others = obj[:5], obj[5:]
+
+            raise DumpError(
+                "some object(s) matched an error rule: %s%s"
+                % (
+                    ", ".join(map(str, obj)),
+                    " and other %d objects" % len(others) if others else "",
+                )
+            )
+
         self.writer.begin_dump()
 
-        for obj in objs + matviews:
-            if obj.extension is not None and obj.extcondition is None:
-                logger.debug(
-                    "%s %s in extension %s has no dump condition: skipping",
-                    obj.kind,
-                    obj,
-                    obj.extension,
-                )
-                continue
-
-            rule = self.get_rule(obj)
-            if rule is None:
+        for obj in objs:
+            action = self.actions[obj.oid]
+            if action.action == Action.ACTION_UNKNOWN:
                 logger.debug(
                     "%s %s doesn't match any rule: skipping", obj.kind, obj,
                 )
                 continue
 
-            if rule.action == rule.ACTION_SKIP:
+            if action.action == action.ACTION_SKIP:
                 logger.debug("skipping %s %s", obj.kind, obj)
                 continue
-
-            elif rule.action == rule.ACTION_ERROR:
-                raise DumpError(
-                    "%s %s matches the error rule at %s"
-                    % (obj.kind, obj, rule.pos)
-                )
 
             try:
                 meth = getattr(
@@ -106,48 +140,17 @@ class Dumper:
                 raise DumpError(
                     "don't know how to dump objects of kind %s" % obj.kind
                 )
-            meth(obj, rule)
+            meth(obj, action)
 
         self.writer.end_dump()
 
-    def get_rule(self, obj):
-        """
-        Return the rule matching the object.
-        """
-        # First just check for a basic rule matching
-        rule = self.get_object_rule(obj)
-        if rule is not None:
-            logger.debug(
-                "%s %s matches rule at %s", obj.kind, obj.escaped, rule.pos
-            )
-            return rule
-
-        # If not found, maybe it's a sequence used by a table dumped anyway
-        # in such case we want to dump it
-        if isinstance(obj, Sequence):
-            return self._get_sequence_dependency_rule(obj)
-
-    def _get_sequence_dependency_rule(self, seq):
+    def _get_sequence_dependency_action(self, seq):
         for table, column in self.db.get_tables_using_sequence(seq.oid):
-            rule = self.get_object_rule(table)
-            if rule is None:
+            ta = self.actions[table.oid]
+            if ta.action not in (Action.ACTION_DUMP, Action.ACTION_REFERENCED):
                 continue
 
-            if rule.action == rule.ACTION_ERROR:
-                raise DumpError(
-                    "%s %s depends on %s %s matching the error rule at %s"
-                    % (
-                        seq.kind,
-                        seq.escaped,
-                        table.kind,
-                        table.escaped,
-                        rule.pos,
-                    )
-                )
-            if rule.action == rule.ACTION_SKIP:
-                continue
-
-            if column.name in rule.no_columns:
+            if column.name in ta.no_columns:
                 logger.debug(
                     "%s %s depends on %s.%s which is not dumped",
                     seq.kind,
@@ -157,7 +160,7 @@ class Dumper:
                 )
                 continue
 
-            if column.name in rule.replace:
+            if column.name in ta.replace:
                 logger.debug(
                     "%s %s depends on %s.%s which is replaced",
                     seq.kind,
@@ -168,8 +171,6 @@ class Dumper:
                 continue
 
             # we found a table wanting this sequence
-            rule = DumpRule()
-            rule.action = rule.ACTION_DEP
             logger.debug(
                 "%s %s is needed by matched %s %s",
                 seq.kind,
@@ -177,15 +178,25 @@ class Dumper:
                 table.kind,
                 table.escaped,
             )
-            return rule
+            action = Action(seq, action=Action.ACTION_REFERENCED)
+            return action
 
-    def get_object_rule(self, obj):
+    def get_object_action(self, obj):
         """
         Return the best matching rule for an object, None if none found
         """
+        if obj.extension is not None and obj.extcondition is None:
+            logger.debug(
+                "%s %s in extension %s has no dump condition: skipping",
+                obj.kind,
+                obj,
+                obj.extension,
+            )
+            return Action(obj, action=Action.ACTION_SKIP)
+
         rules = [rule for rule in self.rules if rule.match(obj)]
         if not rules:
-            return None
+            return Action(obj, action=Action.ACTION_UNKNOWN)
 
         rules.sort(key=attrgetter("score"), reverse=True)
         if len(rules) > 1 and rules[0].score == rules[1].score:
@@ -194,4 +205,4 @@ class Dumper:
                 % (obj.kind, obj.escaped, rules[0].pos, rules[1].pos)
             )
 
-        return rules[0]
+        return Action(obj, rules[0])
