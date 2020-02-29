@@ -177,3 +177,5 @@ class Action:
             self.no_columns = []
             self.replace = {}
             self.filter = None
+
+        self.referenced_by = []
