@@ -5,7 +5,11 @@ from .sample_dbs import create_sample_db
 
 def test_fkey_nav(dumper):
     """
-    Test table1:dump -> table2:ref
+    Test one navigation step
+
+        table1:dump -> table2:ref
+
+        table3:unknown
     """
     dumper.reader.load_db(
         create_sample_db(3, fkeys=[("table1", "t2id", "table2", "id")])
@@ -20,11 +24,15 @@ def test_fkey_nav(dumper):
 
 def test_fkey_nav_rec(dumper):
     """
-    Test table1:dump -> table2:ref -> table3:ref
+    Test navigation is transitive
+
+        table1:dump -> table2:ref -> table3:ref
+
+        table4:unknown
     """
     dumper.reader.load_db(
         create_sample_db(
-            3,
+            4,
             fkeys=[
                 ("table1", "t2id", "table2", "id"),
                 ("table2", "t3id", "table3", "id"),
@@ -41,11 +49,15 @@ def test_fkey_nav_rec(dumper):
 
 def test_fkey_nav_stops_on_skip(dumper):
     """
-    Test table1:dump -> table2:ref -> table3:skip -> table4:unknown
+    Test navigation stops at a skip table
+
+        table1:dump -> table2:ref -> table3:skip -> table4:unknown
+
+        table5:unknown
     """
     dumper.reader.load_db(
         create_sample_db(
-            4,
+            5,
             fkeys=[
                 ("table1", "t2id", "table2", "id"),
                 ("table2", "t3id", "table3", "id"),
@@ -75,10 +87,12 @@ def test_two_referrers(dumper):
                     -> table2:ref ->
         table1:dump                  table4:ref
                     -> table3:ref ->
+
+        table5:unknown
     """
     dumper.reader.load_db(
         create_sample_db(
-            4,
+            5,
             fkeys=[
                 ("table1", "t2id", "table2", "id"),
                 ("table1", "t3id", "table3", "id"),
@@ -111,10 +125,11 @@ def test_no_endless_loop(dumper):
         table1:dump -> table2:ref ->
                             ^        table3:ref
                        table4:ref <-
+        table5:unknown
     """
     dumper.reader.load_db(
         create_sample_db(
-            4,
+            5,
             fkeys=[
                 ("table1", "t12id", "table2", "id"),
                 ("table2", "t3id", "table3", "id"),

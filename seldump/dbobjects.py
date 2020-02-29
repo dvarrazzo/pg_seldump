@@ -50,7 +50,7 @@ class DbObject:
         if kind in consts.PG_KINDS:
             kind = consts.PG_KINDS[kind]
         if kind not in cls._kinds:
-            raise ValueError("unknow db object kind: %s" % kind)
+            raise ValueError("unknown db object kind: %s" % kind)
         return cls._kinds[kind](oid, schema, name, escaped=escaped, **kwargs)
 
     def __repr__(self):
