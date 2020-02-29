@@ -102,3 +102,39 @@ def test_two_referrers(dumper):
         "t24id_table4_id_fkey",
         "t34id_table4_id_fkey",
     ]
+
+
+def test_no_endless_loop(dumper):
+    """
+    Test we don't get stuck in a loop
+
+        table1:dump -> table2:ref ->
+                            ^        table3:ref
+                       table4:ref <-
+    """
+    dumper.reader.load_db(
+        create_sample_db(
+            4,
+            fkeys=[
+                ("table1", "t12id", "table2", "id"),
+                ("table2", "t3id", "table3", "id"),
+                ("table3", "t4id", "table4", "id"),
+                ("table4", "t42id", "table2", "id"),
+            ],
+        )
+    )
+    dumper.add_config({"db_objects": [{"name": "table1"}]})
+    dumper.perform_dump()
+    objs = [
+        obj for obj, action in dumper.writer.dumped if isinstance(obj, Table)
+    ]
+    assert len(objs) == 4
+
+    (action,) = [
+        action for obj, action in dumper.writer.dumped if obj.name == "table2"
+    ]
+    assert len(action.referenced_by) == 2
+    assert sorted(fkey.name for fkey in action.referenced_by) == [
+        "t12id_table2_id_fkey",
+        "t42id_table2_id_fkey",
+    ]
