@@ -73,6 +73,7 @@ definitions:
           - dump
           - skip
           - error
+          - ref
 
       no_columns:
         description: List of columns to omit from the output.

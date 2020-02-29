@@ -22,15 +22,15 @@ class Writer(ABC):
         pass
 
     @abstractmethod
-    def dump_table(self, table, config):
+    def dump_table(self, table, action):
         pass
 
     @abstractmethod
-    def dump_sequence(self, seq, config):
+    def dump_sequence(self, seq, action):
         pass
 
     @abstractmethod
-    def dump_materialized_view(self, matview, config):
+    def dump_materialized_view(self, matview, action):
         pass
 
     @abstractmethod

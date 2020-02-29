@@ -34,11 +34,11 @@ class DumpWriter(Writer):
         if self.outfile is not sys.stdout:
             self.outfile.close()
 
-    def dump_table(self, table, config):
+    def dump_table(self, table, action):
         logger.info("writing %s %s", table.kind, table.escaped)
 
         self._begin_table(table)
-        self._copy_table(table, config)
+        self._copy_table(table, action)
         self._end_table(table)
 
     def _begin_table(self, table):
@@ -58,9 +58,9 @@ class DumpWriter(Writer):
                 % (self._copy_size, table.escaped, pretty)
             )
 
-    def _copy_table(self, table, config):
-        no_columns = set(config.no_columns)
-        replace = config.replace.copy()
+    def _copy_table(self, table, action):
+        no_columns = set(action.no_columns)
+        replace = action.replace.copy()
 
         # If False can use "copy table (attrs) to stdout" to dump data.
         # Otherwise must use a slower "copy (query) to stdout"
@@ -91,7 +91,7 @@ class DumpWriter(Writer):
                 % (table.escaped, ", ".join(sorted(replace)))
             )
 
-        cond = self._get_table_condition(table, config)
+        cond = self._get_table_condition(table, action)
         if cond:
             select = True
 
@@ -121,21 +121,21 @@ class DumpWriter(Writer):
         self._end_copy()
         self.write("\\.\n")
 
-    def _get_table_condition(self, table, config):
+    def _get_table_condition(self, table, action):
         conds = []
         if table.extcondition:
             conds.append(
                 re.replace(r"(?i)^\s*where\s+", table.extcondition, "")
             )
-        if config.filter:
-            conds.append(config.filter)
+        if action.filter:
+            conds.append(action.filter)
 
         if conds:
             return " where " + " and ".join("(%s)" % c for c in conds)
         else:
             return ""
 
-    def dump_sequence(self, seq, config):
+    def dump_sequence(self, seq, action):
         logger.info("writing %s %s", seq.kind, seq.escaped)
 
         val = self.reader.get_sequence_value(seq.escaped)
@@ -144,7 +144,7 @@ class DumpWriter(Writer):
         )
         self.write(self.reader.obj_as_string(stmt))
 
-    def dump_materialized_view(self, matview, config):
+    def dump_materialized_view(self, matview, action):
         logger.info("writing %s %s", matview.kind, matview.escaped)
 
         self.write("\nrefresh materialized view %s;\n" % matview.escaped)
