@@ -12,7 +12,7 @@ from operator import attrgetter
 from .exceptions import ConfigError, DumpError
 from .database import Database
 from .dumprule import Action, DumpRule
-from .dbobjects import MaterializedView, Sequence
+from .dbobjects import MaterializedView, Sequence, Table
 
 logger = logging.getLogger("seldump.dumper")
 
@@ -73,6 +73,14 @@ class Dumper:
             )
             action = self.get_object_action(obj)
             self.actions[obj.oid] = action
+
+        # Find unmentioned tables we need data to fulfill fkeys
+        for obj in self.db:
+            if not isinstance(obj, Table):
+                continue
+            if self.actions[obj.oid].action != Action.ACTION_DUMP:
+                continue
+            self._add_referred_tables(obj)
 
         # Find unmentioned sequences and check if any table depend on them
         for obj in self.db:
@@ -143,6 +151,37 @@ class Dumper:
             meth(obj, action)
 
         self.writer.end_dump()
+
+    def _add_referred_tables(self, table, seen=None):
+        logger.debug("exploring %s foreign keys", table)
+        if seen is None:
+            seen = set()
+
+        if table.oid in seen:
+            logger.warning("found a table loop: stopping here for now")
+
+        seen.add(table.oid)
+
+        for fkey in table.fkeys:
+            if fkey.table_oid == fkey.ftable_oid:
+                logger.warning(
+                    "not dealing with self-referencing fkey %s now", fkey.name
+                )
+                continue
+
+            logger.debug("found fkey %s", fkey.name)
+            faction = self.actions[fkey.ftable_oid]
+            if faction.action not in (
+                Action.ACTION_UNKNOWN,
+                Action.ACTION_REFERENCED,
+            ):
+                # skip, dump, error: we don't have to navigate it tho
+                continue
+
+            faction.action = Action.ACTION_REFERENCED
+            faction.referenced_by.append(fkey)
+
+            self._add_referred_tables(faction.obj, seen)
 
     def _get_sequence_dependency_action(self, seq):
         for table, column in self.db.get_tables_using_sequence(seq.oid):
