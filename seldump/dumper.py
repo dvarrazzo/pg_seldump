@@ -158,7 +158,7 @@ class Dumper:
             seen = set()
 
         if table.oid in seen:
-            logger.warning("found a table loop: stopping here for now")
+            return
 
         seen.add(table.oid)
 
