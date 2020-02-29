@@ -183,7 +183,7 @@ order by a.attrelid, a.attnum
             return cur.fetchall()
 
     def _fetch_fkeys(self):
-        logger.debug("fetching sequences dependencies")
+        logger.debug("fetching foreign keys")
         with self.cursor() as cur:
             cur.execute(
                 """
