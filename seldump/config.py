@@ -61,6 +61,14 @@ def get_config_errors(conf, filename="<no name>"):
     for obj in conf.get("db_objects", ()):
         if isinstance(obj, dict):
             rv.extend(_get_rule_errors(obj, filename))
+
+    # sort by line number
+    def lineno(s):
+        m = re.search(r":(\d+)", s)
+        return int(m.group(1)) if m is not None else 0
+
+    rv.sort(key=lineno)
+
     return rv
 
 
