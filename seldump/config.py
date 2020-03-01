@@ -144,6 +144,11 @@ def location_from_error(conf, error):
     """
     Return location information from a yaml validation error.
     """
+    if error.validator == "additionalProperties":
+        rv = _location_from_addprops(conf, error)
+        if rv is not None:
+            return rv
+
     # find the closest location for the error
     trail = [conf]
     for item in error.path:
@@ -173,3 +178,21 @@ def location_from_error(conf, error):
                 # also add the attribute name
                 rv = "%s: %s" % (rv, error.path[-1])
             return rv
+
+
+def _location_from_addprops(conf, error):
+    # Special-case this error otherwise it will report the object position
+    # not the attribute one.
+    filename = getattr(error.instance, "filename", None)
+    itemlines = getattr(error.instance, "itemlines", None)
+    if not (filename and itemlines):
+        return
+
+    # parse the attr name from the error message, I don't see it elsewhere
+    m = re.search(r"'([^']*)' was unexpected", error.message)
+    if m is None:
+        return
+
+    attr = m.group(1)
+    if attr in itemlines:
+        return "%s:%s" % (filename, itemlines[attr])

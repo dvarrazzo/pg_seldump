@@ -167,3 +167,18 @@ db_objects:
     assert "'wat' is not one of" in errors[0]
     assert "string>:3" in errors[1]
     assert "'wat' is not one of" in errors[1]
+
+
+def test_unexpected_attr():
+    conf = load_yaml(
+        """\
+db_objects:
+  - name: billy
+    kid: table
+        """
+    )
+    errors = get_config_errors(conf)
+    assert len(errors) == 1
+    assert "string>:3" in errors[0]
+    assert "kid" in errors[0]
+    assert "unexpected" in errors[0]
