@@ -14,6 +14,11 @@ class Database:
         self._by_oid = {}
         self._by_name = {}
 
+    def clear(self):
+        del self._objects
+        self._by_oid.clear()
+        self._by_name.clear()
+
     def add_object(self, obj):
         self._objects.append(obj)
         if obj.oid is not None:

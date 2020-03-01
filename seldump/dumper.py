@@ -25,10 +25,23 @@ class Dumper:
     def __init__(self, reader, writer):
         self.db = Database()
         self.reader = reader
-        self.reader.db = self.db
         self.writer = writer
         self.rules = []
         self.actions = {}
+
+    @property
+    def reader(self):
+        return self._reader
+
+    @reader.setter
+    def reader(self, reader):
+        self._reader = reader
+        reader.db = self.db
+
+    def clear(self):
+        self.db.clear()
+        del self.rules[:]
+        self.actions.clear()
 
     def add_config(self, cfg):
         """

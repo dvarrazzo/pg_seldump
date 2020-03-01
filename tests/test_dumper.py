@@ -3,8 +3,6 @@ import pytest
 from seldump.dbobjects import Table, Sequence
 from seldump.exceptions import ConfigError
 
-from .sample_dbs import create_sample_db
-
 
 def test_void(dumper):
     """On empty input, result is empty."""
@@ -12,9 +10,9 @@ def test_void(dumper):
     assert not dumper.writer.dumped
 
 
-def test_one_table(dumper):
+def test_one_table(dumper, db):
     """You can select a single table to dump."""
-    dumper.reader.load_db(create_sample_db(2))
+    dumper.reader.load_db(db.create_sample(2))
     dumper.add_config({"db_objects": [{"name": "table1"}]})
     dumper.perform_dump()
 
@@ -38,9 +36,9 @@ def test_one_table(dumper):
 
 
 @pytest.mark.parametrize("spec", ["^table[13]$", ["table1", "table3"]])
-def test_names(dumper, spec):
+def test_names(dumper, db, spec):
     """Tables can be selected by names regexp or list"""
-    dumper.reader.load_db(create_sample_db(3))
+    dumper.reader.load_db(db.create_sample(3))
     dumper.add_config({"db_objects": [{"names": spec}]})
     dumper.perform_dump()
 
@@ -53,9 +51,9 @@ def test_names(dumper, spec):
     assert dumper.db.get("public", "table3") in tables
 
 
-def test_name_over_names_regexp(dumper):
+def test_name_over_names_regexp(dumper, db):
     """A specified name overrides a names regexp"""
-    dumper.reader.load_db(create_sample_db(3))
+    dumper.reader.load_db(db.create_sample(3))
     dumper.add_config(
         {
             "db_objects": [
@@ -76,9 +74,9 @@ def test_name_over_names_regexp(dumper):
 
 
 @pytest.mark.parametrize("bias", [-1, 0, 1])
-def test_name_same_as_names_list(dumper, bias):
+def test_name_same_as_names_list(dumper, db, bias):
     """List of names have the same precedence over a single name"""
-    dumper.reader.load_db(create_sample_db(2))
+    dumper.reader.load_db(db.create_sample(2))
     dumper.add_config(
         {
             "db_objects": [

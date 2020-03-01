@@ -1,9 +1,7 @@
 from seldump.dbobjects import Table
 
-from .sample_dbs import create_sample_db
 
-
-def test_fkey_nav(dumper):
+def test_fkey_nav(dumper, db):
     """
     Test one navigation step
 
@@ -12,7 +10,7 @@ def test_fkey_nav(dumper):
         table3:unknown
     """
     dumper.reader.load_db(
-        create_sample_db(3, fkeys=[("table1", "t2id", "table2", "id")])
+        db.create_sample(3, fkeys=[("table1", "t2id", "table2", "id")])
     )
     dumper.add_config({"db_objects": [{"name": "table1"}]})
     dumper.perform_dump()
@@ -22,7 +20,7 @@ def test_fkey_nav(dumper):
     assert len(objs) == 2
 
 
-def test_fkey_nav_rec(dumper):
+def test_fkey_nav_rec(dumper, db):
     """
     Test navigation is transitive
 
@@ -31,7 +29,7 @@ def test_fkey_nav_rec(dumper):
         table4:unknown
     """
     dumper.reader.load_db(
-        create_sample_db(
+        db.create_sample(
             4,
             fkeys=[
                 ("table1", "t2id", "table2", "id"),
@@ -47,7 +45,7 @@ def test_fkey_nav_rec(dumper):
     assert len(objs) == 3
 
 
-def test_fkey_nav_stops_on_skip(dumper):
+def test_fkey_nav_stops_on_skip(dumper, db):
     """
     Test navigation stops at a skip table
 
@@ -56,7 +54,7 @@ def test_fkey_nav_stops_on_skip(dumper):
         table5:unknown
     """
     dumper.reader.load_db(
-        create_sample_db(
+        db.create_sample(
             5,
             fkeys=[
                 ("table1", "t2id", "table2", "id"),
@@ -80,7 +78,7 @@ def test_fkey_nav_stops_on_skip(dumper):
     assert len(objs) == 2
 
 
-def test_two_referrers(dumper):
+def test_two_referrers(dumper, db):
     """
     Test that table4 gets two referrers.
 
@@ -91,7 +89,7 @@ def test_two_referrers(dumper):
         table5:unknown
     """
     dumper.reader.load_db(
-        create_sample_db(
+        db.create_sample(
             5,
             fkeys=[
                 ("table1", "t2id", "table2", "id"),
@@ -118,7 +116,7 @@ def test_two_referrers(dumper):
     ]
 
 
-def test_no_endless_loop(dumper):
+def test_no_endless_loop(dumper, db):
     """
     Test we don't get stuck in a loop
 
@@ -128,7 +126,7 @@ def test_no_endless_loop(dumper):
         table5:unknown
     """
     dumper.reader.load_db(
-        create_sample_db(
+        db.create_sample(
             5,
             fkeys=[
                 ("table1", "t12id", "table2", "id"),
