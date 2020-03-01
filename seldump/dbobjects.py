@@ -136,6 +136,11 @@ class Table(DbObject):
             )
         self.fkeys.append(fkey)
 
+    def get_fkey(self, name):
+        for fkey in self.fkeys:
+            if fkey.name == name:
+                return fkey
+
     def add_ref_fkey(self, fkey):
         for col in fkey.ftable_cols:
             assert (

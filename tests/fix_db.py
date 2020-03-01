@@ -3,6 +3,7 @@ from collections import OrderedDict, defaultdict
 import pytest
 import psycopg2
 from psycopg2 import sql
+from psycopg2 import extensions as ext
 
 from seldump import consts
 from seldump.database import Database
@@ -43,6 +44,19 @@ def dbreader(dsn):
     reader = DbReader(dsn)
     reader.db = Database()
     return reader
+
+
+@pytest.fixture()
+def fakeconn():
+    """Return a fake connection useful to pass to Composable.as_string()."""
+
+    def fake_quote_ident(s, context):
+        return '"%s"' % s.replace('"', '""')
+
+    orig_quote_ident = ext.quote_ident
+    ext.quote_ident = fake_quote_ident
+    yield None
+    ext.quote_ident = orig_quote_ident
 
 
 @pytest.fixture()
