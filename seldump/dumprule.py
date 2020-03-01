@@ -29,20 +29,62 @@ class DumpRule:
     # The actions that can be chosen in the config file
     ACTIONS = [ACTION_DUMP, ACTION_SKIP, ACTION_ERROR]
 
-    def __init__(self):
+    def __init__(
+        self,
+        name=None,
+        names=None,
+        schema=None,
+        schemas=None,
+        kind=None,
+        kinds=None,
+        adjust_score=0,
+        action=ACTION_DUMP,
+        no_columns=None,
+        replace=None,
+        filter=None,
+    ):
+        """
+        The constructor arguments are the attributes from a valid rule object
+        validated according the `schema/config.yaml` rules
+        """
         # Matching attributes
-        self.names = set()
-        self.names_re = None
-        self.schemas = set()
-        self.schemas_re = None
-        self.kinds = set()
-        self.adjust_score = 0
+        if name is not None:
+            names = [name]
+
+        if names is None:
+            self.names = set()
+            self.names_re = None
+        elif isinstance(names, list):
+            self.names = set(names)
+            self.names_re = None
+        else:
+            self.names = set()
+            self.names_re = re.compile(names, re.VERBOSE)
+
+        if schema is not None:
+            schemas = [schema]
+
+        if schemas is None:
+            self.schemas = set()
+            self.schemas_re = None
+        elif isinstance(schemas, list):
+            self.schemas = set(schemas)
+            self.schemas_re = None
+        else:
+            self.schemas = set()
+            self.schemas_re = re.compile(schemas, re.VERBOSE)
+
+        if kind is not None:
+            kinds = [kind]
+        self.kinds = set(kinds or ())
+
+        self.adjust_score = adjust_score
 
         # Actions
-        self.action = self.ACTION_DUMP
-        self.no_columns = []
-        self.replace = {}
-        self.filter = None
+        self.action = action
+        self.no_columns = no_columns or []
+        self.replace = replace or {}
+        self.filter = filter
 
         # Description
         self.filename = None
@@ -96,51 +138,3 @@ class DumpRule:
             return False
 
         return True
-
-    @classmethod
-    def from_config(cls, cfg):
-        """
-        Return a new DumpRule from a YAML content.
-        """
-        rv = cls()
-
-        if "name" in cfg:
-            rv.names.add(cfg["name"])
-
-        if "names" in cfg:
-            if isinstance(cfg["names"], list):
-                rv.names.update(cfg["names"])
-            else:
-                rv.names_re = re.compile(cfg["names"], re.VERBOSE)
-
-        if "schema" in cfg:
-            rv.schemas.add(cfg["schema"])
-
-        if "schemas" in cfg:
-            if isinstance(cfg["schemas"], list):
-                rv.schemas.update(cfg["schemas"])
-            else:
-                rv.schemas_re = re.compile(cfg["schemas"], re.VERBOSE)
-
-        if "kind" in cfg:
-            rv.kinds.add(cfg["kind"])
-
-        if "kinds" in cfg:
-            rv.kinds.update(cfg["kinds"])
-
-        if "action" in cfg:
-            rv.action = cfg["action"].lower()
-
-        if "no_columns" in cfg:
-            rv.no_columns = cfg["no_columns"]
-
-        if "replace" in cfg:
-            rv.replace = cfg["replace"]
-
-        if "filter" in cfg:
-            rv.filter = cfg["filter"]
-
-        if "adjust_score" in cfg:
-            rv.adjust_score = cfg["adjust_score"]
-
-        return rv
