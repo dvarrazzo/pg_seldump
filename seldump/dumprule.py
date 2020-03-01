@@ -90,6 +90,18 @@ class DumpRule:
         self.filename = None
         self.lineno = None
 
+    @classmethod
+    def from_config(cls, cfg):
+        """
+        Create a rule from a config object.
+
+        It will also try to store the config position if found.
+        """
+        rv = cls(**cfg)
+        rv.filename = getattr(cfg, "filename", None)
+        rv.lineno = getattr(cfg, "lineno", None)
+        return rv
+
     @property
     @lru_cache(maxsize=1)
     def score(self):

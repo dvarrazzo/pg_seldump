@@ -49,7 +49,7 @@ class Dumper:
             )
 
         for cfg in objs:
-            self.rules.append(DumpRule(**cfg))
+            self.rules.append(DumpRule.from_config(cfg))
 
     def perform_dump(self):
         """
