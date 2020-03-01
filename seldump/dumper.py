@@ -250,4 +250,4 @@ class Dumper:
                 % (obj.kind, obj.escaped, rules[0].pos, rules[1].pos)
             )
 
-        return Action(obj, rules[0])
+        return Action.from_rule(obj, rules[0])

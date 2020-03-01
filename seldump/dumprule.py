@@ -163,28 +163,32 @@ class Action:
     ACTION_REFERENCED = DumpRule.ACTION_REFERENCED
     ACTION_UNKNOWN = "unknown"
 
-    def __init__(self, obj, rule=None, action=None):
+    def __init__(self, obj, action=ACTION_UNKNOWN):
         self.obj = obj
-        self.rule = rule
+        self.action = action
+
+        self.rule = None
+        self.no_columns = []
+        self.replace = {}
+        self.filter = None
         self.error = None
 
-        if rule is not None:
-            self.action = rule.action
-            self.no_columns = rule.no_columns
-            self.replace = rule.replace
-            self.filter = rule.filter
-            if rule.action == DumpRule.ACTION_ERROR:
-                if rule.filename and rule.lineno:
-                    self.error = (
-                        "the object matches the error rule at %s:%s"
-                        % (rule.filename, rule.lineno)
-                    )
-                else:
-                    self.error = "the object matches an error rule"
-        else:
-            self.action = action or self.ACTION_UNKNOWN
-            self.no_columns = []
-            self.replace = {}
-            self.filter = None
-
         self.referenced_by = []
+
+    @classmethod
+    def from_rule(cls, obj, rule):
+        rv = cls(obj, rule.action)
+        rv.action = rule.action
+        rv.no_columns = rule.no_columns
+        rv.replace = rule.replace
+        rv.filter = rule.filter
+        if rule.action == DumpRule.ACTION_ERROR:
+            if rule.filename and rule.lineno:
+                rv.error = "the object matches the error rule at %s:%s" % (
+                    rule.filename,
+                    rule.lineno,
+                )
+            else:
+                rv.error = "the object matches an error rule"
+
+        return rv
