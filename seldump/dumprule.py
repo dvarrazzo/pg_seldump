@@ -166,12 +166,21 @@ class Action:
     def __init__(self, obj, rule=None, action=None):
         self.obj = obj
         self.rule = rule
+        self.error = None
 
         if rule is not None:
             self.action = rule.action
             self.no_columns = rule.no_columns
             self.replace = rule.replace
             self.filter = rule.filter
+            if rule.action == DumpRule.ACTION_ERROR:
+                if rule.filename and rule.lineno:
+                    self.error = (
+                        "the object matches the error rule at %s:%s"
+                        % (rule.filename, rule.lineno)
+                    )
+                else:
+                    self.error = "the object matches an error rule"
         else:
             self.action = action or self.ACTION_UNKNOWN
             self.no_columns = []

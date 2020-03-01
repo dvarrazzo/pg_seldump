@@ -69,7 +69,8 @@ def script():
         sys.exit(main())
 
     except SelDumpException as e:
-        logger.error("%s", e)
+        if str(e):
+            logger.error("%s", e)
         sys.exit(1)
 
     except BrokenPipeError as e:
