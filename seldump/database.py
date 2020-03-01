@@ -35,6 +35,8 @@ class Database:
             )
         self._by_name[obj.escaped] = obj
 
+        return obj
+
     def get(self, escaped_or_schema=None, name=None, oid=None, cls=None):
         """
         Return an object from the database.
