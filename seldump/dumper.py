@@ -105,18 +105,24 @@ class Dumper:
             if action is not None:
                 self.actions[obj.oid] = action
 
+        # search and report errors
+        has_errors = False
+        for obj in self.db:
+            action = self.actions[obj.oid]
+            if action.error:
+                logger.error("cannot dump %s: %s", obj, action.error)
+                has_errors = True
+
+        if has_errors:
+            raise DumpError()
+
     def apply_actions(self):
         # Refresh the materialized views at the end.
         # TODO: actually they should be dumped in dependency order.
         objs = []
         matviews = []
-        errors = []
 
         for obj in self.db:
-            action = self.actions[obj.oid]
-            if action.action == Action.ACTION_ERROR:
-                errors.append(action)
-
             if isinstance(obj, MaterializedView):
                 matviews.append(obj)
             else:
@@ -124,25 +130,12 @@ class Dumper:
 
         objs.extend(matviews)
 
-        if errors:
-            objs = [action.obj for action in errors]
-            if len(errors) <= 10:
-                others = []
-            else:
-                obj, others = obj[:5], obj[5:]
-
-            raise DumpError(
-                "some object(s) matched an error rule: %s%s"
-                % (
-                    ", ".join(map(str, obj)),
-                    " and other %d objects" % len(others) if others else "",
-                )
-            )
-
         self.writer.begin_dump()
 
         for obj in objs:
             action = self.actions[obj.oid]
+            assert action.action != Action.ACTION_ERROR
+
             if action.action == Action.ACTION_UNKNOWN:
                 logger.debug(
                     "%s %s doesn't match any rule: skipping", obj.kind, obj,
