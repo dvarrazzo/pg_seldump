@@ -2,8 +2,6 @@ import pytest
 
 from seldump.dbobjects import Table, Sequence
 
-from .sample_dbs import create_sample_db
-
 
 @pytest.mark.parametrize(
     "details, dumped",
@@ -15,8 +13,8 @@ from .sample_dbs import create_sample_db
         ({"replace": {"id": "NULL"}}, False),
     ],
 )
-def test_sequence_skipped(dumper, details, dumped):
-    dumper.reader.load_db(create_sample_db(2))
+def test_sequence_skipped(dumper, db, details, dumped):
+    dumper.reader.load_db(db.create_sample(2))
 
     tbl = dumper.db.get("public", "table1")
     assert isinstance(tbl, Table)
@@ -37,8 +35,8 @@ def test_sequence_skipped(dumper, details, dumped):
         assert seq not in objs
 
 
-def test_sequence_skip_override(dumper):
-    dumper.reader.load_db(create_sample_db(2))
+def test_sequence_skip_override(dumper, db):
+    dumper.reader.load_db(db.create_sample(2))
     tbl = dumper.db.get("public", "table1")
     seq = dumper.db.get("public", "table1_id_seq")
     dumper.add_config(

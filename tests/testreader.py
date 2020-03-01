@@ -17,14 +17,12 @@ class TestReader(Reader):
     def load_db(self, objs):
         used_seqs = defaultdict(list)
 
-        for name, obj in objs.items():
+        for obj in objs:
+            name = obj["name"]
             assert '"' not in name  # TODO: test with funny names
+            assert "." not in name  # TODO: test with funny names
 
-            parts = name.split(".")
-            assert len(parts) <= 2
-            if len(parts) == 1:
-                parts.insert(0, "public")
-            schema, name = parts
+            schema = obj.get("schmea", "public")
 
             kind = obj.get("kind", "table")
             oid = obj.get("oid", None)
@@ -56,11 +54,11 @@ class TestReader(Reader):
                 self.db.add_sequence_user(seq, obj, col.name)
 
         # create fkeys
-        for name1, obj in objs.items():
+        for obj in objs:
             if not obj.get("fkeys"):
                 continue
             # TODO: other schemas
-            t1 = self.db.get("public", name1)
+            t1 = self.db.get(obj.get("schema", "public"), obj["name"])
             assert t1
             for fkey in obj["fkeys"]:
                 # TODO: other schemas
