@@ -71,11 +71,14 @@ class DumpWriter(Writer):
 
         self.write(action.import_statement)
 
-        logger.debug("exporting using: %s", action.copy_statement)
+        stmt = self.reader.obj_as_string(action.copy_statement)
+        logger.debug("exporting using: %s", stmt)
+
         self._begin_copy()
         try:
-            self.reader.copy(action.copy_statement, self.outfile)
+            self.reader.copy(stmt, self.outfile)
         except psycopg2.DatabaseError as e:
+            logger.error("failed copy using statement:\n\n%s\n", stmt)
             raise DumpError("failed to copy from table %s: %s" % (table, e))
         else:
             self.write("\\.\n")

@@ -370,7 +370,9 @@ class StatementsGenerator:
 
             if col.name in action.replace:
                 attrs.append(
-                    sql.SQL("({})").format(sql.SQL(action.replace[col.name]))
+                    sql.SQL("({})").format(
+                        sql.SQL(action.replace[col.name].strip())
+                    )
                 )
                 select = True
             else:
@@ -384,14 +386,14 @@ class StatementsGenerator:
                 )
             )
         if action.filter:
-            conds.append(sql.SQL(action.filter))
+            conds.append(sql.SQL(action.filter.strip()))
 
         if conds:
             select = True
             conds = sql.SQL(" and ").join(
                 sql.SQL("({})").format(cond) for cond in conds
             )
-            conds = sql.SQL("where {}").format(conds)
+            conds = sql.SQL(" where {}").format(conds)
         else:
             conds = sql.SQL("")
 
