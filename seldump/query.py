@@ -14,33 +14,38 @@ This file is part of pg_seldump.
 
 from psycopg2 import sql
 
-from .nodes import Node, NodeVisitor
+from .nodes import NodeVisitor
 from .dbobjects import Table
 
 
-class QueryNode(Node):
+class QueryNode:
+    def as_string(self):
+        return PrintQueryVisitor().as_string(self)
+
+
+class Query(QueryNode):
     pass
 
 
-class Select(QueryNode):
-    def __init__(self, fro, columns, where):
-        self.fro = fro
+class Select(Query):
+    def __init__(self, columns, from_, where):
         self.columns = columns
+        self.from_ = from_
         self.where = where
 
 
-class Union(QueryNode):
+class Union(Query):
     def __init__(self, queries):
         self.queries = queries
 
 
-class FromEntry(Node):
+class FromEntry(QueryNode):
     def __init__(self, source, alias=None):
         self.source = source
         self.alias = alias
 
 
-class Predicate(Node):
+class Predicate(QueryNode):
     pass
 
 
@@ -49,16 +54,36 @@ class Exists(Predicate):
         self.query = query
 
 
+class Or(Predicate):
+    def __init__(self, conds):
+        self.conds = conds
+
+
+class And(Predicate):
+    def __init__(self, conds):
+        self.conds = conds
+
+
 class FkeyJoin(Predicate):
-    def __init__(self, fkey, fro, to):
+    def __init__(self, fkey, from_, to):
         self.fkey = fkey
-        self.fro = fro
+        self.from_ = from_
         self.to = to
 
 
 class SqlQueryVisitor(NodeVisitor):
-    def __init__(self, db):
-        self.db = db
+    def __init__(self):
+        self._level = 0
+
+    def indent(self):
+        self._level += 4
+
+    def dedent(self):
+        self._level -= 4
+        assert self._level >= 0
+
+    def indented(self, obj):
+        return sql.Composed([sql.SQL("\n"), sql.SQL(" " * self._level), obj])
 
     def visit_Select(self, select):
         cols = []
@@ -71,41 +96,131 @@ class SqlQueryVisitor(NodeVisitor):
                 raise TypeError("bad column: %s" % col)
 
         parts = []
-        parts.append(sql.SQL("select"))
+        parts.append(self.indented(sql.SQL("select")))
         parts.append(sql.SQL(", ").join(cols))
-        parts.append(sql.SQL("\nfrom"))
-        parts.append(self.visit(select.fro))
+        parts.append(self.indented(sql.SQL("from")))
+        parts.append(self.visit(select.from_))
         if select.where:
-            parts.append(sql.SQL("\nwhere"))
+            parts.append(self.indented(sql.SQL("where")))
             parts.append(self.visit(select.where))
 
         return sql.SQL(" ").join(parts)
 
-    def visit_FromEntry(self, fro):
-        if isinstance(fro.source, Table):
-            rv = sql.Identifier(fro.source.schema, fro.source.name)
-        elif isinstance(fro.source, Node):
-            rv = self.visit(fro.source)
+    def visit_FromEntry(self, from_):
+        if isinstance(from_.source, sql.Composable):
+            rv = from_.source
+        elif isinstance(from_.source, Table):
+            rv = from_.source.ident
+        elif isinstance(from_.source, QueryNode):
+            rv = self.visit(from_.source)
         else:
-            raise TypeError("can't deal with %s in a 'from'", fro.source)
+            raise TypeError("can't deal with %s in a 'from'", from_.source)
 
-        if fro.alias:
-            rv = sql.SQL("{} as {}").format(rv, sql.Identifier(fro.alias))
+        if from_.alias:
+            rv = sql.SQL("{} as {}").format(rv, sql.Identifier(from_.alias))
         return rv
 
     def visit_Exists(self, exists):
-        return sql.SQL("exists (\n{}\n)").format(self.visit(exists.query))
+        rv = []
+        rv.append(sql.SQL("exists ("))
+        self.indent()
+        rv.append(self.visit(exists.query))
+        self.dedent()
+        rv.append(self.indented(sql.SQL(")")))
+        return sql.Composed(rv)
+
+    def visit_And(self, node, kw="and"):
+        rv = []
+        for i, cond in enumerate(node.conds):
+            if i:
+                rv.append(self.indented(sql.SQL(kw + " ")))
+            rv.append(self.visit(cond))
+        return sql.Composed(rv)
+
+    def visit_Or(self, or_):
+        return self.visit_And(or_, kw="or")
 
     def visit_FkeyJoin(self, join):
         if len(join.fkey.table_cols) == 1:
-            lhs = sql.Identifier(join.fro, join.fkey.table_cols[0])
+            lhs = sql.Identifier(join.from_, join.fkey.table_cols[0])
             rhs = sql.Identifier(join.to, join.fkey.ftable_cols[0])
         else:
             lhs = sql.SQL(", ").join(
-                sql.Identifier(join.fro, col) for col in join.fkey.table_cols
+                sql.Identifier(join.from_, col) for col in join.fkey.table_cols
             )
             rhs = sql.SQL(", ").join(
                 sql.Identifier(join.to, col) for col in join.fkey.ftable_cols
             )
 
         return sql.SQL("(({}) = ({}))").format(lhs, rhs)
+
+    def visit_Composable(self, obj):
+        return obj
+
+
+class PrintQueryVisitor(NodeVisitor):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self._stack = []
+        self.output = []
+        self._level = 0
+
+    def as_string(self, node):
+        self.reset()
+        self.visit(node)
+        return "\n".join(self.output)
+
+    def visit_QueryNode(self, node):
+        line = [node.__class__.__name__]
+        if not self.empty():
+            line.insert(0, "%s:" % self.top())
+        self.emit(*line)
+        self.indent()
+        for k, v in node.__dict__.items():
+            if v is None:
+                continue
+            self.push(k)
+            self.visit(v)
+            self.pop()
+
+        self.dedent()
+
+    def visit_list(self, L):
+        if not self.empty():
+            self.emit("%s:" % self.top())
+        self.indent()
+        for i, item in enumerate(L):
+            self.push(i)
+            self.visit(item)
+            self.pop()
+        self.dedent()
+
+    def visit_object(self, obj):
+        line = [obj]
+        if not self.empty():
+            line.insert(0, "%s:" % self.top())
+        self.emit(*line)
+
+    def emit(self, *bits):
+        self.output.append(" " * self._level + " ".join(map(str, bits)))
+
+    def empty(self):
+        return not self._stack
+
+    def push(self, item):
+        self._stack.append(item)
+
+    def pop(self):
+        return self._stack.pop()
+
+    def top(self):
+        return self._stack[-1] if self._stack else None
+
+    def indent(self):
+        self._level += 2
+
+    def dedent(self):
+        self._level -= 2
+        assert self._level >= 0, self._level
