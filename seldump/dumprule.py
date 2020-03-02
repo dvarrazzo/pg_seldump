@@ -171,9 +171,12 @@ class Action:
         self.no_columns = []
         self.replace = {}
         self.filter = None
-        self.error = None
 
         self.referenced_by = []
+
+        self.import_statement = None
+        self.copy_statement = None
+        self.errors = []
 
     @classmethod
     def from_rule(cls, obj, rule):
@@ -184,11 +187,13 @@ class Action:
         rv.filter = rule.filter
         if rule.action == DumpRule.ACTION_ERROR:
             if rule.filename and rule.lineno:
-                rv.error = "the object matches the error rule at %s:%s" % (
+                msg = "the object matches the error rule at %s:%s" % (
                     rule.filename,
                     rule.lineno,
                 )
             else:
-                rv.error = "the object matches an error rule"
+                msg = "the object matches an error rule"
+
+            rv.errors.append(msg)
 
         return rv

@@ -10,6 +10,7 @@ import logging
 from functools import lru_cache
 
 import psycopg2
+from psycopg2 import sql
 from psycopg2.extras import NamedTupleCursor
 
 from .consts import DUMPABLE_KINDS, KIND_TABLE, KIND_PART_TABLE, REVKINDS
@@ -214,12 +215,16 @@ order by name
             )
             return cur.fetchall()
 
-    def get_sequence_value(self, sequence_escaped):
+    def get_sequence_value(self, seq):
         """
         Return the last value of a sequence.
         """
         with self.cursor() as cur:
-            cur.execute("select last_value from %s" % sequence_escaped)
+            cur.execute(
+                sql.SQL("select last_value from {}").format(
+                    sql.Identifier(seq.schema, seq.name)
+                )
+            )
             val = cur.fetchone()[0]
             return val
 

@@ -5,7 +5,6 @@ Writing to a dump file.
 This file is part of pg_seldump.
 """
 
-import re
 import sys
 import math
 import logging
@@ -59,95 +58,43 @@ class DumpWriter(Writer):
             )
 
     def _copy_table(self, table, action):
-        no_columns = set(action.no_columns)
-        replace = action.replace.copy()
+        assert action.import_statement
+        assert action.copy_statement
 
-        # If False can use "copy table (attrs) to stdout" to dump data.
-        # Otherwise must use a slower "copy (query) to stdout"
-        select = False
+        self.write(action.import_statement)
 
-        attrs_in = []
-        attrs_out = []
-        for col in table.columns:
-            if col.name in no_columns:
-                no_columns.remove(col.name)
-                continue
-
-            attrs_in.append(col.escaped)
-            if col.name in replace:
-                attrs_out.append("(%s)" % replace.pop(col.name))
-                select = True
-            else:
-                attrs_out.append(col.escaped)
-
-        if no_columns:
-            raise DumpError(
-                "table %s has no attribute %s mentioned in 'no_columns'"
-                % (table.escaped, ", ".join(sorted(no_columns)))
-            )
-        if replace:
-            raise DumpError(
-                "table %s has no attribute %s mentioned in 'replace'"
-                % (table.escaped, ", ".join(sorted(replace)))
-            )
-
-        cond = self._get_table_condition(table, action)
-        if cond:
-            select = True
-
-        if not select:
-            source = "%s (%s)" % (table.escaped, ", ".join(attrs_out))
-        else:
-            source = "(select %s from only %s%s)" % (
-                ", ".join(attrs_out),
-                table.escaped,
-                cond,
-            )
-
-        self.write(
-            "\ncopy %s (%s) from stdin;\n"
-            % (table.escaped, ", ".join(attrs_in))
-        )
-
-        logger.debug("exporting using: %s", source)
+        logger.debug("exporting using: %s", action.copy_statement)
         self._begin_copy()
         try:
-            self.reader.copy("copy %s to stdout" % source, self.outfile)
+            self.reader.copy(action.copy_statement, self.outfile)
         except psycopg2.DatabaseError as e:
             raise DumpError(
                 "failed to copy from table %s: %s" % (table.escaped, e)
             )
+        else:
+            self.write("\\.\n")
 
         self._end_copy()
-        self.write("\\.\n")
-
-    def _get_table_condition(self, table, action):
-        conds = []
-        if table.extcondition:
-            conds.append(
-                re.replace(r"(?i)^\s*where\s+", table.extcondition, "")
-            )
-        if action.filter:
-            conds.append(action.filter)
-
-        if conds:
-            return " where " + " and ".join("(%s)" % c for c in conds)
-        else:
-            return ""
 
     def dump_sequence(self, seq, action):
-        logger.info("writing %s %s", seq.kind, seq.escaped)
+        logger.info("writing %s %s", seq.kind, seq)
 
-        val = self.reader.get_sequence_value(seq.escaped)
+        # Escape the sequence as identifier then as string to make a value
+        # good for regclass
+        name = sql.Identifier(seq.schema, seq.name)
+        name = sql.Literal(self.reader.obj_as_string(name))
+
+        val = sql.Literal(self.reader.get_sequence_value(seq))
         stmt = sql.SQL("\nselect pg_catalog.setval({}, {}, true);\n\n").format(
-            sql.Literal(seq.escaped), sql.Literal(val)
+            name, val
         )
-        self.write(self.reader.obj_as_string(stmt))
+        self.write(stmt)
 
     def dump_materialized_view(self, matview, action):
         logger.info("writing %s %s", matview.kind, matview.escaped)
 
-        self.write("\nrefresh materialized view %s;\n" % matview.escaped)
+        assert action.import_statement
+        self.write(action.import_statement)
 
     def begin_dump(self):
         self.write(
@@ -171,6 +118,9 @@ class DumpWriter(Writer):
         self.write("-- vim: set filetype=:\n")
 
     def write(self, data):
+        if isinstance(data, sql.Composable):
+            data = self.reader.obj_as_string(data)
+
         self.outfile.write(data)
 
     def _begin_copy(self):
