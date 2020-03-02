@@ -174,6 +174,7 @@ class Action:
 
         self.referenced_by = []
 
+        self.query = None
         self.import_statement = None
         self.copy_statement = None
         self.errors = []

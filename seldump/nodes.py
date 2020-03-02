@@ -15,20 +15,17 @@ class Node:
     This impleentation is Liskov-friendly.
     """
 
-    def accept(self, visitor):
-        for cls in self.__class__.__mro__:
-            meth = getattr(visitor, "visit_" + cls.__name__, None)
-            if meth is not None:
-                return meth(self)
-
-        else:
-            # We expect at list visit_object to be implemented
-            assert False, "no visitor method found in %r" % visitor
-
 
 class NodeVisitor:
     def visit(self, node):
-        return node.accept(self)
+        for cls in node.__class__.__mro__:
+            meth = getattr(self, "visit_" + cls.__name__, None)
+            if meth is not None:
+                return meth(node)
+
+        else:
+            # We expect at list visit_object to be implemented
+            assert False, "no visitor method found in %r" % self
 
     def visit_object(self, node):
         raise NotImplementedError(
