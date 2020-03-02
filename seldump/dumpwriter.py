@@ -34,17 +34,25 @@ class DumpWriter(Writer):
             self.outfile.close()
 
     def dump_table(self, table, action):
-        logger.info("writing %s %s", table.kind, table.escaped)
+        logger.info("writing %s %s", table.kind, table)
 
         self._begin_table(table)
         self._copy_table(table, action)
         self._end_table(table)
 
     def _begin_table(self, table):
-        self.write("\nalter table %s disable trigger all;\n" % table.escaped)
+        self.write(
+            sql.SQL("\nalter table {} disable trigger all;\n").format(
+                table.ident
+            )
+        )
 
     def _end_table(self, table):
-        self.write("\nalter table %s enable trigger all;\n\n" % table.escaped)
+        self.write(
+            sql.SQL("\nalter table {} enable trigger all;\n\n").format(
+                table.ident
+            )
+        )
 
         if self._copy_size is not None:
             if self._copy_size >= 1024:
@@ -54,7 +62,7 @@ class DumpWriter(Writer):
 
             self.write(
                 "-- %s bytes written for table %s%s\n\n"
-                % (self._copy_size, table.escaped, pretty)
+                % (self._copy_size, table, pretty)
             )
 
     def _copy_table(self, table, action):
@@ -68,9 +76,7 @@ class DumpWriter(Writer):
         try:
             self.reader.copy(action.copy_statement, self.outfile)
         except psycopg2.DatabaseError as e:
-            raise DumpError(
-                "failed to copy from table %s: %s" % (table.escaped, e)
-            )
+            raise DumpError("failed to copy from table %s: %s" % (table, e))
         else:
             self.write("\\.\n")
 
@@ -89,7 +95,7 @@ class DumpWriter(Writer):
         self.write(stmt)
 
     def dump_materialized_view(self, matview, action):
-        logger.info("writing %s %s", matview.kind, matview.escaped)
+        logger.info("writing %s %s", matview.kind, matview)
 
         assert action.import_statement
         self.write(action.import_statement)

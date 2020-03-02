@@ -21,7 +21,6 @@ class DbObject:
         "oid",
         "schema",
         "name",
-        "escaped",
         "extension",
         "extcondition",
     )
@@ -31,39 +30,28 @@ class DbObject:
     kind = None
 
     def __init__(
-        self,
-        oid,
-        schema,
-        name,
-        escaped=None,
-        extension=None,
-        extcondition=None,
+        self, oid, schema, name, extension=None, extcondition=None,
     ):
         self.oid = oid
         self.schema = schema
         self.name = name
-        self.escaped = escaped or self.escape_idents(schema, name)
         self.extension = extension
         self.extcondition = extcondition
 
     @classmethod
-    def from_kind(cls, kind, oid, schema, name, escaped=None, **kwargs):
+    def from_kind(cls, kind, oid, schema, name, **kwargs):
         # Values from the database or from yaml
         if kind in consts.PG_KINDS:
             kind = consts.PG_KINDS[kind]
         if kind not in cls._kinds:
             raise ValueError("unknown db object kind: %s" % kind)
-        return cls._kinds[kind](oid, schema, name, escaped=escaped, **kwargs)
+        return cls._kinds[kind](oid, schema, name, **kwargs)
 
     def __repr__(self):
-        return "<%s %s at 0x%x>" % (
-            self.__class__.__name__,
-            self.escaped,
-            id(self),
-        )
+        return "<%s %s at 0x%x>" % (self.__class__.__name__, self, id(self))
 
     def __str__(self):
-        return self.escaped
+        return self.escape_idents(self.schema, self.name)
 
     @property
     def ident(self):
@@ -74,6 +62,11 @@ class DbObject:
     def escape_idents(self, *args):
         """
         Convert tokens into dot-separated string to be safety merged to a query
+
+        It gives a mmore readable but less secure version of ident, because it
+        doesn't escape keywords; however it's a string so it can be just
+        printed, without requiring a connection as Identifier.to_string() does.
+        Use it only to display to humans, not to send to the database.
         """
         rv = []
         for arg in args:
@@ -176,12 +169,11 @@ class MaterializedView(DbObject):
 
 
 class Column:
-    __slots__ = ("name", "type", "escaped", "used_sequence_oids")
+    __slots__ = ("name", "type", "used_sequence_oids")
 
-    def __init__(self, name, type, escaped=None):
+    def __init__(self, name, type):
         self.name = name
         self.type = type
-        self.escaped = escaped or DbObject.escape_idents(name)
         self.used_sequence_oids = []
 
     @property
@@ -190,14 +182,10 @@ class Column:
         return sql.Identifier(self.name)
 
     def __repr__(self):
-        return "<%s %s at 0x%x>" % (
-            self.__class__.__name__,
-            self.escaped,
-            id(self),
-        )
+        return "<%s %s at 0x%x>" % (self.__class__.__name__, self, id(self))
 
     def __str__(self):
-        return self.escaped
+        return DbObject.escape_idents(self.name)
 
     def add_used_sequence(self, seq):
         if not seq.oid:

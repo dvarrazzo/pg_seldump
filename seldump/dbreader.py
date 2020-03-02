@@ -54,7 +54,6 @@ class DbReader(Reader):
                 oid=rec.oid,
                 schema=rec.schema,
                 name=rec.name,
-                escaped=rec.escaped,
                 extension=rec.extension,
                 extcondition=rec.extcondition,
             )
@@ -66,7 +65,7 @@ class DbReader(Reader):
                 rec.table_oid,
                 rec.name,
             )
-            col = Column(name=rec.name, type=rec.type, escaped=rec.escaped)
+            col = Column(name=rec.name, type=rec.type)
             table.add_column(col)
 
         for rec in self._fetch_fkeys():
@@ -110,8 +109,6 @@ select
     s.nspname as schema,
     r.relname as name,
     r.relkind as kind,
-    pg_catalog.format('%%I.%%I', s.nspname, r.relname)
-        as escaped,
 
     e.extname as extension,
     -- equivalent of
@@ -167,8 +164,7 @@ join pg_class seq
 select
     attrelid as table_oid,
     attname as name,
-    atttypid::regtype as type,
-    quote_ident(attname) as escaped
+    atttypid::regtype as type
 from pg_attribute a
 join pg_class r on r.oid = a.attrelid
 join pg_namespace s on s.oid = r.relnamespace

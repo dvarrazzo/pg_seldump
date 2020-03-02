@@ -5,7 +5,7 @@ Representation of a database to handle by the program.
 This file is part of pg_seldump.
 """
 
-from .dbobjects import DbObject, Table
+from .dbobjects import Table
 
 
 class Database:
@@ -29,30 +29,31 @@ class Database:
                 )
             self._by_oid[obj.oid] = obj
 
-        if obj.escaped in self._by_name:
+        key = (obj.schema, obj.name)
+        if key in self._by_name:
             raise ValueError(
                 "the database already contains an object called %s" % obj
             )
-        self._by_name[obj.escaped] = obj
+        self._by_name[key] = obj
 
         return obj
 
-    def get(self, escaped_or_schema=None, name=None, oid=None, cls=None):
+    def get(self, schema=None, name=None, oid=None, cls=None):
         """
         Return an object from the database.
 
-        The object can be specified by escaped name, by schema/name or by oid.
+        The object can be specified by schema/name or by oid.
         It is possible to specify the class of the object espected.
 
         Return None if the object is not found or if it is not the right class.
         """
-        if escaped_or_schema is not None:
-            if name is not None:
-                escaped = DbObject.escape_idents(escaped_or_schema, name)
-            else:
-                escaped = escaped_or_schema
+        if (schema is None) != (name is None):
+            raise TypeError(
+                "you should either specify both schema and name or none"
+            )
 
-            rv = self._by_name.get(escaped)
+        if schema is not None:
+            rv = self._by_name.get((schema, name))
         elif oid:
             rv = self._by_oid.get(oid)
         else:

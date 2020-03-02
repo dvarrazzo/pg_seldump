@@ -209,8 +209,8 @@ class Dumper:
                 logger.debug(
                     "%s %s depends on %s.%s which is not dumped",
                     seq.kind,
-                    seq.escaped,
-                    table.escaped,
+                    seq,
+                    table,
                     column.name,
                 )
                 continue
@@ -219,8 +219,8 @@ class Dumper:
                 logger.debug(
                     "%s %s depends on %s.%s which is replaced",
                     seq.kind,
-                    seq.escaped,
-                    table.escaped,
+                    seq,
+                    table,
                     column.name,
                 )
                 continue
@@ -229,9 +229,9 @@ class Dumper:
             logger.debug(
                 "%s %s is needed by matched %s %s",
                 seq.kind,
-                seq.escaped,
+                seq,
                 table.kind,
-                table.escaped,
+                table,
             )
             action = Action(seq, action=Action.ACTION_REFERENCED)
             return action
@@ -257,7 +257,7 @@ class Dumper:
         if len(rules) > 1 and rules[0].score == rules[1].score:
             raise ConfigError(
                 "%s %s matches more than one rule: at %s and %s"
-                % (obj.kind, obj.escaped, rules[0].pos, rules[1].pos)
+                % (obj.kind, obj, rules[0].pos, rules[1].pos)
             )
 
         return Action.from_rule(obj, rules[0])
@@ -295,7 +295,7 @@ class StatementsGenerator:
         )
         if meth is None:
             action.errors.append(
-                "don't know how to dump %s %s" % (obj.kind, obj.escaped,)
+                "don't know how to dump %s %s" % (obj.kind, obj)
             )
 
         meth(obj, action)
@@ -325,7 +325,7 @@ class StatementsGenerator:
             self.generate_copy_to_ref(table, action)
         else:
             assert False, "{} {} got action {}".format(
-                table.kind, table.escaped, action.action
+                table.kind, table, action.action
             )
 
         self.generate_copy_from(table, action)
