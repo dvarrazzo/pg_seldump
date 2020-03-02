@@ -305,10 +305,9 @@ class StatementsGenerator:
         pass
 
     def generate_for_materialized_view(self, matview, action):
-        name = sql.Identifier(matview.schema, matview.name)
         action.import_statement = sql.SQL(
             "\nrefresh materialized view {};\n"
-        ).format(name)
+        ).format(matview.ident)
 
     def generate_for_table(self, table, action):
         # Discard quietly a table with no column
@@ -352,15 +351,12 @@ class StatementsGenerator:
 
     def generate_copy_from(self, table, action):
         attrs = [
-            sql.Identifier(col.name)
-            for col in table.columns
-            if col not in action.no_columns
+            col.ident for col in table.columns if col not in action.no_columns
         ]
 
-        name = sql.Identifier(table.schema, table.name)
         action.import_statement = sql.SQL(
             "\ncopy {} ({}) from stdin;\n"
-        ).format(name, sql.SQL(", ").join(attrs))
+        ).format(table.ident, sql.SQL(", ").join(attrs))
 
     def generate_copy_to_dump(self, table, action):
         # If False can use "copy table (attrs) to stdout" to dump data.
@@ -378,7 +374,7 @@ class StatementsGenerator:
                 )
                 select = True
             else:
-                attrs.append(sql.Identifier(col.name))
+                attrs.append(col.ident)
 
         conds = []
         if table.extcondition:
@@ -401,14 +397,11 @@ class StatementsGenerator:
 
         if not select:
             source = sql.SQL("{} ({})").format(
-                sql.Identifier(table.schema, table.name),
-                sql.SQL(", ").join(attrs),
+                table.ident, sql.SQL(", ").join(attrs)
             )
         else:
             source = sql.SQL("(select {} from only {}{})").format(
-                sql.SQL(", ").join(attrs),
-                sql.Identifier(table.schema, table.name),
-                conds,
+                sql.SQL(", ").join(attrs), table.ident, conds,
             )
 
         action.copy_statement = sql.SQL("copy {} to stdout").format(source)
