@@ -116,6 +116,8 @@ class Dumper:
     def generate_statements(self):
         gen = StatementsGenerator()
         for obj in self.db:
+            if not isinstance(obj, Table):
+                continue
             action = self.actions[obj.oid]
             gen.generate_statements(obj, action)
 
@@ -286,36 +288,16 @@ class Dumper:
 
 
 class StatementsGenerator:
-    def generate_statements(self, obj, action):
+    def generate_statements(self, table, action):
         if action.action not in (Action.ACTION_DUMP, Action.ACTION_REFERENCED):
             return
 
-        meth = getattr(
-            self, "generate_for_" + obj.kind.replace(" ", "_"), None
-        )
-        if meth is None:
-            action.errors.append(
-                "don't know how to dump %s %s" % (obj.kind, obj)
-            )
-
-        meth(obj, action)
-
-    def generate_for_sequence(self, seq, action):
-        # Nothing to do here: everything must happen at dump time
-        pass
-
-    def generate_for_materialized_view(self, matview, action):
-        action.import_statement = sql.SQL(
-            "\nrefresh materialized view {};\n"
-        ).format(matview.ident)
-
-    def generate_for_table(self, table, action):
         # Discard quietly a table with no column
         if not table.columns:
             action.action = Action.ACTION_SKIP
             return
 
-        self.find_table_errors(table, action)
+        self.find_errors(table, action)
         if action.errors:
             return
 
@@ -330,7 +312,7 @@ class StatementsGenerator:
 
         self.generate_copy_from(table, action)
 
-    def find_table_errors(self, table, action):
+    def find_errors(self, table, action):
         for col in action.no_columns:
             if table.get_column(col) is None:
                 action.errors.append(
