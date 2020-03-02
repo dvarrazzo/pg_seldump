@@ -100,8 +100,9 @@ class DumpWriter(Writer):
     def dump_materialized_view(self, matview, action):
         logger.info("writing %s %s", matview.kind, matview)
 
-        assert action.import_statement
-        self.write(action.import_statement)
+        self.write(
+            sql.SQL("\nrefresh materialized view {};\n").format(matview.ident)
+        )
 
     def begin_dump(self):
         self.write(
