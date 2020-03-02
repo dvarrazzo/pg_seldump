@@ -42,6 +42,10 @@ def main():
     for conf in confs:
         dumper.add_config(conf)
 
+    # Plan now. before opening the output file to write.
+    reader.load_schema()
+    dumper.plan_dump()
+
     if not opt.test:
         if opt.outfile != "-":
             try:
@@ -57,8 +61,7 @@ def main():
         dumper.writer = writer
 
     try:
-        reader.load_schema()
-        dumper.perform_dump()
+        dumper.run_dump()
     finally:
         writer.close()
 
