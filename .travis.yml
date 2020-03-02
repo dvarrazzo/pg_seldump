@@ -2,6 +2,10 @@
 
 language: python
 
+env:
+  global:
+    - SELDUMP_TEST_DSN=dbname=seldump_test
+
 matrix:
   include:
 
@@ -62,4 +66,4 @@ install:
   - test ${TOXENV:0:2} != py || psql -c 'create database seldump_test'
 
 script:
-  - tox -- --test-dsn dbname=seldump_test
+  - tox
