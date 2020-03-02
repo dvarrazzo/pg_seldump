@@ -75,9 +75,25 @@ class Dumper:
         Read schema and data from the reader, apply the configured rule,
         use the writer to emit dump data.
         """
+        self.plan_dump()
+        self.run_dump()
+
+    def plan_dump(self):
+        """
+        Read config, source db, and calculate the operations to perform.
+
+        This step doesn't need a writer.
+        """
         self.gather_actions()
         self.generate_statements()
         self.report_errors()
+
+    def run_dump(self):
+        """
+        Perform a dump running the steps previously planned.
+        """
+        if self.writer is None:
+            raise ValueError("no writer set")
         self.apply_actions()
 
     def gather_actions(self):
