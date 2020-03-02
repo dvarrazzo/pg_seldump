@@ -107,10 +107,10 @@ class SqlQueryVisitor(NodeVisitor):
         return sql.SQL(" ").join(parts)
 
     def visit_FromEntry(self, from_):
-        if isinstance(from_.source, sql.Composable):
-            rv = from_.source
+        if isinstance(from_.source, sql.Identifier):
+            rv = sql.Composed([sql.SQL("only "), from_.source])
         elif isinstance(from_.source, Table):
-            rv = from_.source.ident
+            rv = sql.Composed([sql.SQL("only "), from_.source.ident])
         elif isinstance(from_.source, QueryNode):
             rv = self.visit(from_.source)
         else:
