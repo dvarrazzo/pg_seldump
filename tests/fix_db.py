@@ -175,15 +175,13 @@ order by 1, 2
         cnn.commit()
 
     def _create_table(self, cnn, db, table):
-        name = sql.Identifier(table.schema, table.name)
         cols = []
         for col in table.columns:
-            bits = [sql.Identifier(col.name), sql.SQL(col.type)]
+            bits = [col.ident, sql.SQL(col.type)]
             if col.used_sequence_oids:
                 assert len(col.used_sequence_oids) == 1
                 # sequence name in a SQL literal, e.g. '"foo"."bar"'
-                seq = db.get(oid=col.used_sequence_oids[0])
-                seq = sql.Identifier(seq.schema, seq.name)
+                seq = db.get(oid=col.used_sequence_oids[0]).ident
                 seq = sql.Literal(seq.as_string(cnn))
                 bits.append(
                     sql.SQL("default nextval({}::regclass)").format(seq)
@@ -191,14 +189,13 @@ order by 1, 2
             cols.append(sql.SQL(" ").join(bits))
 
         stmt = sql.SQL("create table {} ({})").format(
-            name, sql.SQL(", ").join(cols)
+            table.ident, sql.SQL(", ").join(cols)
         )
         with cnn.cursor() as cur:
             cur.execute(stmt)
 
     def _create_sequence(self, cnn, db, seq):
-        name = sql.Identifier(seq.schema, seq.name)
-        stmt = sql.SQL("create sequence {}").format(name)
+        stmt = sql.SQL("create sequence {}").format(seq.ident)
         with cnn.cursor() as cur:
             cur.execute(stmt)
 
@@ -217,7 +214,7 @@ order by 1, 2
             sql.Identifier(
                 "%s_%s_key" % (t2.name, "_".join(fkey.ftable_cols))
             ),
-            sql.Identifier(t2.schema, t2.name),
+            t2.ident,
             sql.SQL(", ").join(map(sql.Identifier, fkey.ftable_cols)),
         )
 
@@ -227,10 +224,10 @@ order by 1, 2
             foreign key ({}) references {} ({})
             """
         ).format(
-            sql.Identifier(t1.schema, t1.name),
-            sql.Identifier(fkey.name),
+            t1.ident,
+            fkey.ident,
             sql.SQL(", ").join(map(sql.Identifier, fkey.table_cols)),
-            sql.Identifier(t2.schema, t2.name),
+            t2.ident,
             sql.SQL(", ").join(map(sql.Identifier, fkey.ftable_cols)),
         )
         with cnn.cursor() as cur:

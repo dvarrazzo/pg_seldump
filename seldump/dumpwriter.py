@@ -81,9 +81,7 @@ class DumpWriter(Writer):
 
         # Escape the sequence as identifier then as string to make a value
         # good for regclass
-        name = sql.Identifier(seq.schema, seq.name)
-        name = sql.Literal(self.reader.obj_as_string(name))
-
+        name = sql.Literal(self.reader.obj_as_string(seq.ident))
         val = sql.Literal(self.reader.get_sequence_value(seq))
         stmt = sql.SQL("\nselect pg_catalog.setval({}, {}, true);\n\n").format(
             name, val

@@ -220,11 +220,7 @@ order by name
         Return the last value of a sequence.
         """
         with self.cursor() as cur:
-            cur.execute(
-                sql.SQL("select last_value from {}").format(
-                    sql.Identifier(seq.schema, seq.name)
-                )
-            )
+            cur.execute(sql.SQL("select last_value from {}").format(seq.ident))
             val = cur.fetchone()[0]
             return val
 

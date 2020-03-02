@@ -7,6 +7,8 @@ This file is part of pg_seldump.
 
 import re
 
+from psycopg2 import sql
+
 from . import consts
 
 
@@ -62,6 +64,11 @@ class DbObject:
 
     def __str__(self):
         return self.escaped
+
+    @property
+    def ident(self):
+        """The object name as an Identifier"""
+        return sql.Identifier(self.schema, self.name)
 
     @classmethod
     def escape_idents(self, *args):
@@ -177,6 +184,11 @@ class Column:
         self.escaped = escaped or DbObject.escape_idents(name)
         self.used_sequence_oids = []
 
+    @property
+    def ident(self):
+        """The column name as an Identifier"""
+        return sql.Identifier(self.name)
+
     def __repr__(self):
         return "<%s %s at 0x%x>" % (
             self.__class__.__name__,
@@ -208,6 +220,11 @@ class ForeignKey:
         self.table_cols = table_cols
         self.ftable_oid = ftable_oid
         self.ftable_cols = ftable_cols
+
+    @property
+    def ident(self):
+        """The fkey name as an Identifier"""
+        return sql.Identifier(self.name)
 
     def __repr__(self):
         return "<%s %s at 0x%x>" % (
