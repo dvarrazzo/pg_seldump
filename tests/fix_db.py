@@ -1,3 +1,4 @@
+import os
 from collections import OrderedDict, defaultdict
 
 import pytest
@@ -17,7 +18,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--test-dsn",
         metavar="DSN",
-        help="Connection string to run database tests with the `conn` fixture.",
+        default=os.environ.get("SELDUMP_TEST_DSN") or None,
+        help="Connection string to run database tests with the `conn` fixture"
+        " [you can also use the SELDUMP_TEST_DSN env var].",
     )
 
 
@@ -25,7 +28,7 @@ def pytest_addoption(parser):
 def dsn(request):
     """Return the dsn used to connect to the `--test-dsn` database."""
     dsn = request.config.getoption("--test-dsn")
-    if dsn is None:
+    if not dsn:
         pytest.skip("skipping test as no --test-dsn")
     return dsn
 
