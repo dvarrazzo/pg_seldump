@@ -365,22 +365,9 @@ class StatementsGenerator:
     def set_copy_to_dump(self, table, action):
         # If False can use "copy table (attrs) to stdout" to dump data.
         # Otherwise must use a slower "copy (query) to stdout"
-        select = False
+        select = action.replace or action.filter or table.extcondition
 
-        attrs = []
-        for col in table.columns:
-            if col.name in action.no_columns:
-                continue
-
-            if col.name in action.replace:
-                attrs.append(
-                    sql.SQL("({})").format(
-                        sql.SQL(action.replace[col.name].strip())
-                    )
-                )
-                select = True
-            else:
-                attrs.append(col.ident)
+        attrs = self._get_dump_attrs(table, action)
 
         conds = []
         if table.extcondition:
@@ -393,7 +380,6 @@ class StatementsGenerator:
             conds.append(sql.SQL(action.filter.strip()))
 
         if conds:
-            select = True
             conds = sql.SQL(" and ").join(
                 sql.SQL("({})").format(cond) for cond in conds
             )
@@ -436,7 +422,7 @@ class StatementsGenerator:
                 where = query.Or([where, cond])
 
         sel = query.Select(
-            columns=[sql.SQL("*")],  # TODO
+            columns=self._get_dump_attrs(table, action),
             from_=query.FromEntry(table.ident, alias=alias),
             where=where,
         )
@@ -481,6 +467,23 @@ class StatementsGenerator:
                     where=where,
                 )
             )
+
+    def _get_dump_attrs(self, table, action):
+        rv = []
+        for col in table.columns:
+            if col.name in action.no_columns:
+                continue
+
+            if col.name in action.replace:
+                rv.append(
+                    sql.SQL("({})").format(
+                        sql.SQL(action.replace[col.name].strip())
+                    )
+                )
+            else:
+                rv.append(col.ident)
+
+        return rv
 
     def _get_alias(self):
         rv = "t%s" % self._alias_seq
