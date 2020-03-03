@@ -58,9 +58,10 @@ def get_config_errors(conf, filename="<no name>"):
         loc = location_from_error(conf, error)
         rv.append(located_message(loc, filename, error.message))
 
-    for obj in conf.get("db_objects", ()):
-        if isinstance(obj, dict):
-            rv.extend(_get_rule_errors(obj, filename))
+    if isinstance(conf.get("db_objects"), list):
+        for obj in conf["db_objects"]:
+            if isinstance(obj, dict):
+                rv.extend(_get_rule_errors(obj, filename))
 
     # sort by line number
     def lineno(s):
