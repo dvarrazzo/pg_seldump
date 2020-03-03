@@ -439,7 +439,7 @@ class StatementsGenerator:
         if paction.action == Action.ACTION_DUMP:
             where = fkcond
             if paction.filter:
-                where = query.And([where, sql.SQL(paction.filter)])
+                where = query.And([where, sql.SQL(paction.filter.strip())])
             return query.Exists(
                 query=query.Select(
                     columns=[sql.SQL("1")],
