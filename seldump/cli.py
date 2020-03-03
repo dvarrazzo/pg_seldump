@@ -49,13 +49,13 @@ def main():
     if not opt.test:
         if opt.outfile != "-":
             try:
-                outfile = open(opt.outfile, "w")
+                outfile = open(opt.outfile, "wb")
             except Exception as e:
                 raise ConfigError(
                     "couldn't open %s for writing: %s" % (outfile, e)
                 )
         else:
-            outfile = sys.stdout
+            outfile = sys.stdout.buffer
 
         writer = DumpWriter(outfile=outfile, reader=reader)
         dumper.writer = writer

@@ -1,10 +1,14 @@
+import io
 import os
+import shutil
+import subprocess as sp
 from collections import OrderedDict, defaultdict
 
 import pytest
 import psycopg2
 from psycopg2 import sql
 from psycopg2 import extensions as ext
+from psycopg2.extras import execute_values
 
 from seldump import consts
 from seldump.database import Database
@@ -42,14 +46,6 @@ def conn(dsn):
 
 
 @pytest.fixture()
-def dbreader(dsn):
-    """Return a DbReader instance connected to the `--test-dsn` database"""
-    reader = DbReader(dsn)
-    reader.db = Database()
-    return reader
-
-
-@pytest.fixture()
 def fakeconn():
     """Return a fake connection useful to pass to Composable.as_string()."""
 
@@ -68,12 +64,34 @@ def db():
     return TestingDatabase()
 
 
+@pytest.fixture
+def psql(dsn):
+    """Return an object to interact with the test db via psql."""
+    return Psql(dsn)
+
+
 class TestingDatabase:
     """
     An object to create test databases definitions
     """
 
     __test__ = False
+
+    def __init__(self):
+        self.target = None
+
+    @property
+    def connection(self):
+        if self.target is None:
+            raise TypeError("target not set")
+        elif isinstance(self.target, DbReader):
+            return self.target.connection
+        elif isinstance(self.target, ext.connection):
+            return self.target
+        else:
+            raise TypeError(
+                "don't know how to create a connection from %s" % self.target
+            )
 
     def create_sample(self, ntables, fkeys=()):
         """
@@ -146,15 +164,51 @@ order by 1, 2
                 )
                 cur.execute(stmt)
 
-    def write_sample(self, cnn, objs):
+    def write_schema(self, objs):
+        """
+        Create the objs schema into a real database.
+        """
         reader = TestReader()
         reader.db = Database()
         reader.load_db(objs)
-        self.write_db(cnn, reader.db)
+        self.write_dbobjects(self.connection, reader.db)
 
-    def write_db(self, cnn, db):
+    def truncate(self, objs):
         """
-        Write the objects from a Database into a db
+        Clear tables, reset sequences.
+        """
+        with self.connection as conn:
+            with conn.cursor() as cur:
+                for obj in objs:
+                    if isinstance(obj, Table):
+                        cur.execute(
+                            sql.SQL("truncate only {} cascade").format(
+                                obj.ident
+                            )
+                        )
+                    elif isinstance(obj, Sequence):
+                        seq = sql.Literal(obj.ident.as_string(cur))
+                        cur.execute(
+                            sql.SQL("select setval({}, 1, false)").format(seq)
+                        )
+                    elif isinstance(obj, MaterializedView):
+                        # matviews later (but they should be toposorted maybe?)
+                        pass
+
+                    else:
+                        raise TypeError("can't truncate %s" % obj)
+
+                for obj in objs:
+                    if isinstance(obj, MaterializedView):
+                        cur.execute(
+                            sql.SQL("refresh materialized view {}").format(
+                                obj.ident
+                            )
+                        )
+
+    def write_dbobjects(self, cnn, db):
+        """
+        Write the objects from a Database instance into a real database.
         """
         self.clear_database(cnn)
         by_class = defaultdict(list)
@@ -176,6 +230,22 @@ order by 1, 2
                 self._create_fkey(cnn, db, fkey)
 
         cnn.commit()
+
+    def fill_data(self, table, columns, *datacols):
+        if isinstance(columns, str):
+            columns = (columns,)
+        if len(columns) != len(datacols):
+            raise TypeError(
+                "got %s column names but %s data columns"
+                % (len(columns), len(datacols))
+            )
+        stmt = sql.SQL("insert into {} ({}) values %s").format(
+            sql.Identifier(table),
+            sql.SQL(", ").join(map(sql.Identifier, columns)),
+        )
+        with self.connection as conn:
+            with conn.cursor() as curs:
+                execute_values(curs, stmt, zip(*datacols))
 
     def _create_table(self, cnn, db, table):
         cols = []
@@ -236,3 +306,15 @@ order by 1, 2
         with cnn.cursor() as cur:
             cur.execute(idxstmt)
             cur.execute(fkeystmt)
+
+
+class Psql:
+    def __init__(self, dsn):
+        self.dsn = dsn
+
+    def load_file(self, data):
+        if isinstance(data, io.BytesIO):
+            data.seek(0)
+            data = data.read()
+        cmdline = [shutil.which("psql"), "-X", "-1", self.dsn]
+        sp.run(cmdline, input=data, stdout=sp.DEVNULL)

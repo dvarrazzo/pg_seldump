@@ -411,7 +411,7 @@ class StatementsGenerator:
 
         where = None
         for fkey in action.referenced_by:
-            cond = self._get_existance(
+            cond = self._get_existence(
                 table, fkey, parent=alias, seen={table.oid}
             )
             if where is None:
@@ -429,13 +429,15 @@ class StatementsGenerator:
 
         return sel
 
-    def _get_existance(self, table, fkey, parent, seen):
+    def _get_existence(self, table, fkey, parent, seen):
         assert fkey.ftable_oid == table.oid
         alias = self._get_alias()
         ptable = self.db.get(oid=fkey.table_oid)
         paction = self.dumper.actions[fkey.table_oid]
+        fkcond = query.FkeyJoin(fkey=fkey, from_=alias, to=parent)
+
         if paction.action == Action.ACTION_DUMP:
-            where = query.FkeyJoin(fkey=fkey, from_=parent, to=alias)
+            where = fkcond
             if paction.filter:
                 where = query.And([where, sql.SQL(paction.filter)])
             return query.Exists(
@@ -451,7 +453,7 @@ class StatementsGenerator:
                 if ptable.oid in seen:
                     logger.warning("not going recursive for now")
                     continue
-                cond = self._get_existance(
+                cond = self._get_existence(
                     ptable, nfkey, parent=alias, seen=seen | {ptable.oid}
                 )
                 if where is None:
@@ -460,6 +462,12 @@ class StatementsGenerator:
                     where.conds.append(cond)
                 else:
                     where = query.Or([where, cond])
+
+            if where is not None:
+                where = query.And([fkcond, where])
+            else:
+                where = fkcond
+
             return query.Exists(
                 query=query.Select(
                     columns=[sql.SQL("1")],

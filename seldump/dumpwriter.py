@@ -129,6 +129,9 @@ class DumpWriter(Writer):
         if isinstance(data, sql.Composable):
             data = self.reader.obj_as_string(data)
 
+        if isinstance(data, str):
+            data = data.encode("utf8")
+
         self.outfile.write(data)
 
     def _begin_copy(self):
