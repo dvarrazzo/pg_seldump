@@ -126,19 +126,24 @@ class SqlQueryVisitor(NodeVisitor):
         self.indent()
         rv.append(self.visit(exists.query))
         self.dedent()
-        rv.append(self.indented(sql.SQL(")")))
+        rv.append(sql.SQL(")"))
         return sql.Composed(rv)
 
     def visit_And(self, node, kw="and"):
-        rv = []
+        rv = [sql.SQL("(")]
+        self.indent()
         for i, cond in enumerate(node.conds):
             if i:
                 rv.append(self.indented(sql.SQL(kw + " ")))
-            rv.append(self.visit(cond))
+                rv.append(self.visit(cond))
+            else:
+                rv.append(self.indented(self.visit(cond)))
+        rv.append(sql.SQL(")"))
+        self.dedent()
         return sql.Composed(rv)
 
-    def visit_Or(self, or_):
-        return self.visit_And(or_, kw="or")
+    def visit_Or(self, node):
+        return self.visit_And(node, kw="or")
 
     def visit_FkeyJoin(self, join):
         if len(join.fkey.table_cols) == 1:
