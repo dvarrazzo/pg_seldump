@@ -1,24 +1,24 @@
 from seldump.dbobjects import Sequence, Table
 
 
-def test_read_something(dbreader, db):
+def test_read_something(dbdumper, db):
     objs = db.create_sample(2, fkeys=[("table1", "t2id", "table2", "id")])
-    db.write_sample(dbreader.connection, objs)
-    dbreader.load_schema()
+    db.write_schema(objs)
+    dbdumper.reader.load_schema()
 
     ts = {}
     for name in "table1", "table2":
-        ts[name] = table = dbreader.db.get("public", name, cls=Table)
+        ts[name] = table = dbdumper.db.get("public", name, cls=Table)
         assert table
         assert table.oid > 1024
         assert table.name == name
         assert table.get_column("id")
         assert table.get_column("data")
 
-        seq = dbreader.db.get("public", name + "_id_seq", cls=Sequence)
+        seq = dbdumper.db.get("public", name + "_id_seq", cls=Sequence)
         assert seq
 
-        ((t, c),) = dbreader.db.get_tables_using_sequence(seq.oid)
+        ((t, c),) = dbdumper.db.get_tables_using_sequence(seq.oid)
         assert t is table
         assert c is table.get_column("id")
 
