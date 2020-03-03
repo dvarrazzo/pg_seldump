@@ -13,6 +13,7 @@ from operator import attrgetter
 from psycopg2 import sql
 
 from . import query
+from .config import load_yaml, get_config_errors
 from .database import Database
 from .dumprule import Action, DumpRule
 from .dbobjects import MaterializedView, Sequence, Table
@@ -53,20 +54,18 @@ class Dumper:
 
         The structure is what parsed by a json file. It must have a list
         of rules called 'db_objects'.
+
+        You can parse a string too, which will be parsed from json.
         """
-        try:
-            objs = cfg["db_objects"]
-        except (KeyError, TypeError):
-            raise ConfigError(
-                "the config file should have a 'db_objects' list"
-            )
+        if isinstance(cfg, str):
+            # This case is mostly used for testing, so not really caring about
+            # returning all the errors.
+            cfg = load_yaml(cfg)
+            errors = get_config_errors(cfg)
+            if errors:
+                raise ConfigError(errors[0])
 
-        if not isinstance(objs, list):
-            raise ConfigError(
-                "db_objects should be a list, got %s" % type(objs).__name__
-            )
-
-        for cfg in objs:
+        for cfg in cfg["db_objects"]:
             self.rules.append(DumpRule.from_config(cfg))
 
     def perform_dump(self):
@@ -423,7 +422,7 @@ class StatementsGenerator:
 
         sel = query.Select(
             columns=self._get_dump_attrs(table, action),
-            from_=query.FromEntry(table.ident, alias=alias),
+            from_=query.FromEntry(table, alias=alias),
             where=where,
         )
 
