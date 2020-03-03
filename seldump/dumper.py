@@ -304,12 +304,23 @@ class Dumper:
 
 
 class StatementsGenerator:
+    """
+    An object which can generate SQL statements out of the dump state.
+
+    SQL statements are first generates into an intermediate structure (as
+    seldump.query objects), then converted into a query (as psycopg2.sql
+    objects) thanks to the SqlQueryVisitor.
+    """
+
     def __init__(self, dumper):
         self.dumper = dumper
         self.db = self.dumper.db
         self._alias_seq = 0
 
     def make_statements(self, table, action):
+        """
+        Set the statements to be used by the dump operation on `action`.
+        """
         if action.action not in (Action.ACTION_DUMP, Action.ACTION_REFERENCED):
             return
 
@@ -322,18 +333,13 @@ class StatementsGenerator:
         if action.errors:
             return
 
-        if action.action == Action.ACTION_DUMP:
-            self.set_copy_to_dump(table, action)
-        elif action.action == Action.ACTION_REFERENCED:
-            self.set_copy_to_ref(table, action)
-        else:
-            assert False, "{} {} got action {}".format(
-                table.kind, table, action.action
-            )
-
-        self.set_copy_from(table, action)
+        self.set_copy_statement(table, action)
+        self.set_import_statement(table, action)
 
     def find_errors(self, table, action):
+        """
+        Verify correctness of the operation and set errors on `action`.
+        """
         for col in action.no_columns:
             if table.get_column(col) is None:
                 action.errors.append(
@@ -352,7 +358,13 @@ class StatementsGenerator:
                 "the table has no column left to dump: you should skip it"
             )
 
-    def set_copy_from(self, table, action):
+    def set_import_statement(self, table, action):
+        """
+        Set the statement used to import back data on the `action`.
+
+        This statement will usually be printed on output, and will be a COPY
+        FROM STDIN to read data from the rest of the file.
+        """
         attrs = [
             col.ident for col in table.columns if col not in action.no_columns
         ]
@@ -361,119 +373,102 @@ class StatementsGenerator:
             "\ncopy {} ({}) from stdin;\n"
         ).format(table.ident, sql.SQL(", ").join(attrs))
 
-    def set_copy_to_dump(self, table, action):
+    def set_copy_statement(self, table, action):
+        """
+        Set the statement used to extract data from the db on the `action`.
+
+        This statement will be a COPY TO STDOUT that will be executed ad dump
+        time and the output will be added to the dump file.
+
+        The function also sets `action.query`, the query generated.
+        """
         # If False can use "copy table (attrs) to stdout" to dump data.
         # Otherwise must use a slower "copy (query) to stdout"
-        select = action.replace or action.filter or table.extcondition
+        if not (
+            action.action != Action.ACTION_DUMP
+            or action.replace
+            or action.filter
+            or table.extcondition
+        ):
+            self._set_copy_to_simple(table, action)
+        else:
+            q = action.query = self.make_query(table, action)
+            stmt = query.SqlQueryVisitor().visit(q)
+            stmt = sql.SQL("copy (\n{}\n) to stdout").format(stmt)
+            action.copy_statement = stmt
 
+    def _set_copy_to_simple(self, table, action):
         attrs = self._get_dump_attrs(table, action)
-
-        conds = []
-        if table.extcondition:
-            conds.append(
-                sql.SQL(
-                    re.replace(r"(?i)^\s*where\s+", table.extcondition, "")
-                )
-            )
-        if action.filter:
-            conds.append(sql.SQL(action.filter.strip()))
-
-        if conds:
-            conds = sql.SQL(" and ").join(
-                sql.SQL("({})").format(cond) for cond in conds
-            )
-            conds = sql.SQL(" where {}").format(conds)
-        else:
-            conds = sql.SQL("")
-
-        if not select:
-            source = sql.SQL("{} ({})").format(
-                table.ident, sql.SQL(", ").join(attrs)
-            )
-        else:
-            source = sql.SQL("(select {} from only {}{})").format(
-                sql.SQL(", ").join(attrs), table.ident, conds,
-            )
-
-        action.copy_statement = sql.SQL("copy {} to stdout").format(source)
-
-    def set_copy_to_ref(self, table, action):
-        self._alias_seq = 0
-        q = action.query = self.make_ref_query(table, action)
-        stmt = query.SqlQueryVisitor().visit(q)
-        stmt = sql.SQL("copy (\n{}\n) to stdout").format(stmt)
-        action.copy_statement = stmt
-
-    def make_ref_query(self, table, action):
-        # Start with a table
-        alias = self._get_alias()
-
-        where = None
-        for fkey in action.referenced_by:
-            cond = self._get_existence(
-                table, fkey, parent=alias, seen={table.oid}
-            )
-            if where is None:
-                where = cond
-            elif isinstance(where, query.Or):
-                where.conds.append(cond)
-            else:
-                where = query.Or([where, cond])
-
-        sel = query.Select(
-            columns=self._get_dump_attrs(table, action),
-            from_=query.FromEntry(table, alias=alias),
-            where=where,
+        action.copy_statement = sql.SQL("copy {} ({}) to stdout").format(
+            table.ident, sql.SQL(", ").join(attrs)
         )
 
-        return sel
+    def make_query(self, table, action):
+        """
+        Generate the query to execute the desired `action`.
+        """
+        self._alias_seq = 0
+        alias = self._get_alias()
+
+        where = self._get_filters(table, action)
+
+        if action.action == Action.ACTION_REFERENCED:
+            exists = []
+            for fkey in action.referenced_by:
+                exists.append(
+                    self._get_existence(
+                        table, fkey, parent=alias, seen={table.oid}
+                    )
+                )
+            where.append(self._maybe_or(exists))
+
+        return query.Select(
+            columns=self._get_dump_attrs(table, action),
+            from_=query.FromEntry(table, alias=alias),
+            where=self._maybe_and(where),
+        )
 
     def _get_existence(self, table, fkey, parent, seen):
         assert fkey.ftable_oid == table.oid
         alias = self._get_alias()
         ptable = self.db.get(oid=fkey.table_oid)
         paction = self.dumper.actions[fkey.table_oid]
-        fkcond = query.FkeyJoin(fkey=fkey, from_=alias, to=parent)
+        where = [query.FkeyJoin(fkey=fkey, from_=alias, to=parent)]
+        where.extend(self._get_filters(ptable, paction))
 
-        if paction.action == Action.ACTION_DUMP:
-            where = fkcond
-            if paction.filter:
-                where = query.And([where, sql.SQL(paction.filter.strip())])
-            return query.Exists(
-                query=query.Select(
-                    columns=[sql.SQL("1")],
-                    from_=query.FromEntry(ptable, alias=alias),
-                    where=where,
-                )
-            )
-        elif paction.action == Action.ACTION_REFERENCED:
-            where = None
+        if paction.action == Action.ACTION_REFERENCED:
+            exists = []
             for nfkey in paction.referenced_by:
                 if ptable.oid in seen:
                     logger.warning("not going recursive for now")
                     continue
-                cond = self._get_existence(
-                    ptable, nfkey, parent=alias, seen=seen | {ptable.oid}
+                exists.append(
+                    self._get_existence(
+                        ptable, nfkey, parent=alias, seen=seen | {ptable.oid}
+                    )
                 )
-                if where is None:
-                    where = cond
-                elif isinstance(where, query.Or):
-                    where.conds.append(cond)
-                else:
-                    where = query.Or([where, cond])
+            where.append(self._maybe_or(exists))
 
-            if where is not None:
-                where = query.And([fkcond, where])
-            else:
-                where = fkcond
+        return query.Exists(
+            query=query.Select(
+                columns=[sql.SQL("1")],
+                from_=query.FromEntry(ptable, alias=alias),
+                where=self._maybe_and(where),
+            )
+        )
 
-            return query.Exists(
-                query=query.Select(
-                    columns=[sql.SQL("1")],
-                    from_=query.FromEntry(ptable, alias=alias),
-                    where=where,
+    def _get_filters(self, table, action):
+        rv = []
+        if table.extcondition:
+            rv.append(
+                sql.SQL(
+                    re.replace(r"(?i)^\s*where\s+", table.extcondition, "")
                 )
             )
+        if action.filter:
+            rv.append(sql.SQL(action.filter.strip()))
+
+        return rv
 
     def _get_dump_attrs(self, table, action):
         rv = []
@@ -491,6 +486,21 @@ class StatementsGenerator:
                 rv.append(col.ident)
 
         return rv
+
+    def _maybe_and(self, conds):
+        return self._maybe_op(conds, query.And)
+
+    def _maybe_or(self, conds):
+        return self._maybe_op(conds, query.Or)
+
+    def _maybe_op(self, conds, op):
+        conds = [c for c in conds if c is not None]
+        if not conds:
+            return None
+        elif len(conds) == 1:
+            return conds[0]
+        else:
+            return op(conds)
 
     def _get_alias(self):
         rv = "t%s" % self._alias_seq
