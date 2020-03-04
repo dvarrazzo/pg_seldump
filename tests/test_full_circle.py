@@ -58,3 +58,67 @@ db_objects:
             assert cur.fetchone()[0] == 5
             cur.execute("select nextval('table4_id_seq')")
             assert cur.fetchone()[0] == 1
+
+
+def test_columns_edit(db, dbdumper, psql):
+    """
+    Some columns can be omitted, some can be changed.
+    """
+
+    objs = db.create_sample(
+        3,
+        fkeys=[
+            ("table1", "t2id", "table2", "id"),
+            ("table2", "t3id", "table3", "id"),
+        ],
+    )
+
+    for i in range(2):
+        objs[i]["columns"]["password"] = {"name": "password", "type": "text"}
+
+    db.write_schema(objs)
+    db.fill_data("table2", ("data", "password"), "efgh", ["pass"] * 4)
+    db.fill_data(
+        "table1",
+        ("data", "t2id", "password"),
+        "abcd",
+        (1, 1, 2, 3),
+        ["pass"] * 4,
+    )
+
+    dbdumper.reader.load_schema()
+    dbdumper.add_config(
+        """
+db_objects:
+- name: table1
+  filter: data <= 'c'
+  no_columns:
+  - password
+  replace:
+    data: "'x'"
+
+- name: table2
+  action: ref
+  no_columns:
+  - password
+  replace:
+    data: "'y'"
+"""
+    )
+    dbdumper.perform_dump()
+
+    db.truncate(dbdumper.db)
+    psql.load_file(dbdumper.writer.outfile)
+
+    with dbdumper.reader.connection as cnn:
+        with cnn.cursor() as cur:
+            cur.execute(
+                "select id, data, password, t2id from table1 order by id"
+            )
+            assert cur.fetchall() == [
+                (1, "x", None, 1),
+                (2, "x", None, 1),
+                (3, "x", None, 2),
+            ]
+            cur.execute("select id, data, password from table2 order by id")
+            assert cur.fetchall() == [(1, "y", None), (2, "y", None)]

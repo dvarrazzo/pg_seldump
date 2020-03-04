@@ -366,7 +366,9 @@ class StatementsGenerator:
         FROM STDIN to read data from the rest of the file.
         """
         attrs = [
-            col.ident for col in table.columns if col not in action.no_columns
+            col.ident
+            for col in table.columns
+            if col.name not in action.no_columns
         ]
 
         action.import_statement = sql.SQL(
