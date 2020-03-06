@@ -15,7 +15,7 @@ from psycopg2 import sql
 from . import query
 from .config import load_yaml, get_config_errors
 from .database import Database
-from .dumprule import Action, DumpRule
+from .dumprule import DumpRule, RuleMatch
 from .dbobjects import MaterializedView, Sequence, Table
 from .exceptions import ConfigError, DumpError
 
@@ -32,7 +32,7 @@ class Dumper:
         self.reader = reader
         self.writer = writer
         self.rules = []
-        self.actions = {}
+        self.matches = {}
 
     @property
     def reader(self):
@@ -46,7 +46,7 @@ class Dumper:
     def clear(self):
         self.db.clear()
         del self.rules[:]
-        self.actions.clear()
+        self.matches.clear()
 
     def add_config(self, cfg):
         """
@@ -84,7 +84,7 @@ class Dumper:
 
         This step doesn't need a writer.
         """
-        self.gather_actions()
+        self.find_matches()
         self.generate_statements()
         self.report_errors()
 
@@ -96,28 +96,28 @@ class Dumper:
             raise ValueError("no writer set")
         self.apply_actions()
 
-    def gather_actions(self):
+    def find_matches(self):
         """
-        Scan the object in the database and create the actions to dump them.
+        Scan the object in the database and create the matches to dump them.
         """
-        self.actions.clear()
+        self.matches.clear()
 
-        # Associate an action to every object of the database
+        # Associate a match to every object of the database
         for obj in self.db:
             assert obj.oid, "by now, every object should have an oid"
-            assert obj.oid not in self.actions, "oid {} is duplicate".format(
+            assert obj.oid not in self.matches, "oid {} is duplicate".format(
                 obj.oid
             )
-            action = self.get_action(obj)
-            self.actions[obj.oid] = action
+            match = self.get_match(obj)
+            self.matches[obj.oid] = match
 
         # Find tables we need data to fulfill fkeys
         for obj in self.db:
             if not isinstance(obj, Table):
                 continue
-            if self.actions[obj.oid].action not in (
-                Action.ACTION_DUMP,
-                Action.ACTION_REFERENCED,
+            if self.matches[obj.oid].action not in (
+                DumpRule.ACTION_DUMP,
+                DumpRule.ACTION_REFERENCED,
             ):
                 continue
             self._add_referred_tables(obj)
@@ -126,19 +126,19 @@ class Dumper:
         for obj in self.db:
             if not isinstance(obj, Sequence):
                 continue
-            if self.actions[obj.oid].action != Action.ACTION_UNKNOWN:
+            if self.matches[obj.oid].action != DumpRule.ACTION_UNKNOWN:
                 continue
-            action = self._get_sequence_dependency_action(obj)
-            if action is not None:
-                self.actions[obj.oid] = action
+            match = self._get_sequence_dependency_match(obj)
+            if match is not None:
+                self.matches[obj.oid] = match
 
     def generate_statements(self):
         gen = StatementsGenerator(self)
         for obj in self.db:
             if not isinstance(obj, Table):
                 continue
-            action = self.actions[obj.oid]
-            gen.make_statements(obj, action)
+            match = self.matches[obj.oid]
+            gen.make_statements(obj, match)
 
     def report_errors(self):
         """
@@ -147,10 +147,10 @@ class Dumper:
         # search and report errors
         has_errors = False
         for obj in self.db:
-            action = self.actions[obj.oid]
-            if action.errors:
+            match = self.matches[obj.oid]
+            if match.errors:
                 has_errors = True
-                for error in action.errors:
+                for error in match.errors:
                     logger.error("cannot dump %s: %s", obj, error)
 
         if has_errors:
@@ -180,12 +180,12 @@ class Dumper:
         self.writer.begin_dump()
 
         for obj in objs:
-            action = self.actions[obj.oid]
-            meth = getattr(self, "_apply_" + action.action, None)
+            match = self.matches[obj.oid]
+            meth = getattr(self, "_apply_" + match.action, None)
             if meth is None:
-                raise DumpError("cannot dump an action %s", action.action)
+                raise DumpError("cannot dump a match %s", match.action)
 
-            meth(obj, action)
+            meth(obj, match)
 
         self.writer.end_dump()
 
@@ -207,26 +207,29 @@ class Dumper:
                 continue
 
             logger.debug("found fkey %s", fkey.name)
-            faction = self.actions[fkey.ftable_oid]
-            if faction.action not in (
-                Action.ACTION_UNKNOWN,
-                Action.ACTION_REFERENCED,
-                Action.ACTION_DUMP,
+            fmatch = self.matches[fkey.ftable_oid]
+            if fmatch.action not in (
+                DumpRule.ACTION_UNKNOWN,
+                DumpRule.ACTION_REFERENCED,
+                DumpRule.ACTION_DUMP,
             ):
                 # skip, dump, error: we don't have to navigate it tho
                 continue
 
-            if faction.action == Action.ACTION_UNKNOWN:
-                faction.action = Action.ACTION_REFERENCED
-            if fkey not in faction.referenced_by:
-                faction.referenced_by.append(fkey)
+            if fmatch.action == DumpRule.ACTION_UNKNOWN:
+                fmatch.action = DumpRule.ACTION_REFERENCED
+            if fkey not in fmatch.referenced_by:
+                fmatch.referenced_by.append(fkey)
 
-            self._add_referred_tables(faction.obj, seen)
+            self._add_referred_tables(fmatch.obj, seen)
 
-    def _get_sequence_dependency_action(self, seq):
+    def _get_sequence_dependency_match(self, seq):
         for table, column in self.db.get_tables_using_sequence(seq.oid):
-            ta = self.actions[table.oid]
-            if ta.action not in (Action.ACTION_DUMP, Action.ACTION_REFERENCED):
+            ta = self.matches[table.oid]
+            if ta.action not in (
+                DumpRule.ACTION_DUMP,
+                DumpRule.ACTION_REFERENCED,
+            ):
                 continue
 
             if column.name in ta.no_columns:
@@ -257,10 +260,10 @@ class Dumper:
                 table.kind,
                 table,
             )
-            action = Action(seq, action=Action.ACTION_REFERENCED)
-            return action
+            match = RuleMatch(seq, action=DumpRule.ACTION_REFERENCED)
+            return match
 
-    def get_action(self, obj):
+    def get_match(self, obj):
         """
         Return the best matching rule for an object, None if none found
         """
@@ -271,11 +274,11 @@ class Dumper:
                 obj,
                 obj.extension,
             )
-            return Action(obj, action=Action.ACTION_SKIP)
+            return RuleMatch(obj, action=DumpRule.ACTION_SKIP)
 
         rules = [rule for rule in self.rules if rule.match(obj)]
         if not rules:
-            return Action(obj, action=Action.ACTION_UNKNOWN)
+            return RuleMatch(obj, action=DumpRule.ACTION_UNKNOWN)
 
         rules.sort(key=attrgetter("score"), reverse=True)
         if len(rules) > 1 and rules[0].score == rules[1].score:
@@ -284,29 +287,29 @@ class Dumper:
                 % (obj.kind, obj, rules[0].pos, rules[1].pos)
             )
 
-        return Action.from_rule(obj, rules[0])
+        return RuleMatch.from_rule(obj, rules[0])
 
     #
     # Methods to apply rules after statements have been generated
     # (dynamic dispatch from `apply_actions()`)
     #
 
-    def _apply_unknown(self, obj, action):
+    def _apply_unknown(self, obj, match):
         logger.debug("%s %s doesn't match any rule: skipping", obj.kind, obj)
 
-    def _apply_skip(self, obj, action):
+    def _apply_skip(self, obj, match):
         logger.debug("skipping %s %s", obj.kind, obj)
 
-    def _apply_dump(self, obj, action):
+    def _apply_dump(self, obj, match):
         meth = getattr(self.writer, "dump_" + obj.kind.replace(" ", "_"), None)
         if meth is None:
             raise DumpError(
                 "don't know how to dump objects of kind %s" % obj.kind
             )
-        meth(obj, action)
+        meth(obj, match)
 
-    def _apply_ref(self, obj, action):
-        self._apply_dump(obj, action)
+    def _apply_ref(self, obj, match):
+        self._apply_dump(obj, match)
 
 
 class StatementsGenerator:
@@ -323,50 +326,53 @@ class StatementsGenerator:
         self.db = self.dumper.db
         self._alias_seq = 0
 
-    def make_statements(self, table, action):
+    def make_statements(self, table, match):
         """
-        Set the statements to be used by the dump operation on `action`.
+        Set the statements to be used by the dump operation on `match`.
         """
-        if action.action not in (Action.ACTION_DUMP, Action.ACTION_REFERENCED):
+        if match.action not in (
+            DumpRule.ACTION_DUMP,
+            DumpRule.ACTION_REFERENCED,
+        ):
             return
 
         # Discard quietly a table with no column
         if not table.columns:
-            action.action = Action.ACTION_SKIP
+            match.action = DumpRule.ACTION_SKIP
             return
 
-        self.find_errors(table, action)
-        if action.errors:
+        self.find_errors(table, match)
+        if match.errors:
             return
 
-        self.set_copy_statement(table, action)
-        self.set_import_statement(table, action)
+        self.set_copy_statement(table, match)
+        self.set_import_statement(table, match)
 
-    def find_errors(self, table, action):
+    def find_errors(self, table, match):
         """
-        Verify correctness of the operation and set errors on `action`.
+        Verify correctness of the operation and set errors on `match`.
         """
-        for col in action.no_columns:
+        for col in match.no_columns:
             if table.get_column(col) is None:
-                action.errors.append(
+                match.errors.append(
                     "the table doesn't have the column '%s'"
                     " specified in 'no_columns'" % col
                 )
-        for col in action.replace:
+        for col in match.replace:
             if table.get_column(col) is None:
-                action.errors.append(
+                match.errors.append(
                     "the table doesn't have the column '%s'"
                     " specified in 'replace'" % col
                 )
 
-        if len(set(action.no_columns)) == len(table.columns):
-            action.errors.append(
+        if len(set(match.no_columns)) == len(table.columns):
+            match.errors.append(
                 "the table has no column left to dump: you should skip it"
             )
 
-    def set_import_statement(self, table, action):
+    def set_import_statement(self, table, match):
         """
-        Set the statement used to import back data on the `action`.
+        Set the statement used to import back data on the `match`.
 
         This statement will usually be printed on output, and will be a COPY
         FROM STDIN to read data from the rest of the file.
@@ -374,53 +380,53 @@ class StatementsGenerator:
         attrs = [
             col.ident
             for col in table.columns
-            if col.name not in action.no_columns
+            if col.name not in match.no_columns
         ]
 
-        action.import_statement = sql.SQL(
+        match.import_statement = sql.SQL(
             "\ncopy {} ({}) from stdin;\n"
         ).format(table.ident, sql.SQL(", ").join(attrs))
 
-    def set_copy_statement(self, table, action):
+    def set_copy_statement(self, table, match):
         """
-        Set the statement used to extract data from the db on the `action`.
+        Set the statement used to extract data from the db on the `match`.
 
         This statement will be a COPY TO STDOUT that will be executed ad dump
         time and the output will be added to the dump file.
 
-        The function also sets `action.query`, the query generated.
+        The function also sets `match.query`, the query generated.
         """
         # If False can use "copy table (attrs) to stdout" to dump data.
         # Otherwise must use a slower "copy (query) to stdout"
         if not (
-            action.action != Action.ACTION_DUMP
-            or action.replace
-            or action.filter
+            match.action != DumpRule.ACTION_DUMP
+            or match.replace
+            or match.filter
             or table.extcondition
             or table.ref_fkeys
         ):
-            self._set_copy_to_simple(table, action)
+            self._set_copy_to_simple(table, match)
         else:
-            q = action.query = self.make_query(table, action)
+            q = match.query = self.make_query(table, match)
             stmt = query.SqlQueryVisitor().visit(q)
             stmt = sql.SQL("copy (\n{}\n) to stdout").format(stmt)
-            action.copy_statement = stmt
+            match.copy_statement = stmt
 
-    def _set_copy_to_simple(self, table, action):
-        attrs = self._get_dump_attrs(table, action)
-        action.copy_statement = sql.SQL("copy {} ({}) to stdout").format(
+    def _set_copy_to_simple(self, table, match):
+        attrs = self._get_dump_attrs(table, match)
+        match.copy_statement = sql.SQL("copy {} ({}) to stdout").format(
             table.ident, sql.SQL(", ").join(attrs)
         )
 
-    def make_query(self, table, action):
+    def make_query(self, table, match):
         """
-        Generate the query to execute the desired `action`.
+        Generate the query to execute the desired `match`.
         """
         self._alias_seq = 0
         alias = self._get_alias()
 
-        where = [self._maybe_and(self._get_filters(table, action))]
-        for fkey in action.referenced_by:
+        where = [self._maybe_and(self._get_filters(table, match))]
+        for fkey in match.referenced_by:
             where.append(
                 self._get_existence(
                     table, fkey, parent=alias, seen={table.oid}
@@ -428,7 +434,7 @@ class StatementsGenerator:
             )
 
         return query.Select(
-            columns=self._get_dump_attrs(table, action),
+            columns=self._get_dump_attrs(table, match),
             from_=query.FromEntry(table, alias=alias),
             where=self._maybe_or(where),
         )
@@ -437,7 +443,7 @@ class StatementsGenerator:
         assert fkey.ftable_oid == table.oid
         alias = self._get_alias()
         ptable = self.db.get(oid=fkey.table_oid)
-        paction = self.dumper.actions[fkey.table_oid]
+        paction = self.dumper.matches[fkey.table_oid]
         where = self._get_filters(ptable, paction)
 
         for nfkey in paction.referenced_by:
@@ -459,7 +465,7 @@ class StatementsGenerator:
             )
         )
 
-    def _get_filters(self, table, action):
+    def _get_filters(self, table, match):
         rv = []
         if table.extcondition:
             rv.append(
@@ -467,21 +473,21 @@ class StatementsGenerator:
                     re.replace(r"(?i)^\s*where\s+", table.extcondition, "")
                 )
             )
-        if action.filter:
-            rv.append(sql.SQL(action.filter.strip()))
+        if match.filter:
+            rv.append(sql.SQL(match.filter.strip()))
 
         return rv
 
-    def _get_dump_attrs(self, table, action):
+    def _get_dump_attrs(self, table, match):
         rv = []
         for col in table.columns:
-            if col.name in action.no_columns:
+            if col.name in match.no_columns:
                 continue
 
-            if col.name in action.replace:
+            if col.name in match.replace:
                 rv.append(
                     sql.SQL("({})").format(
-                        sql.SQL(action.replace[col.name].strip())
+                        sql.SQL(match.replace[col.name].strip())
                     )
                 )
             else:

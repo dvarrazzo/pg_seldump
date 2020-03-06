@@ -25,6 +25,7 @@ class DumpRule:
     ACTION_SKIP = "skip"
     ACTION_ERROR = "error"
     ACTION_REFERENCED = "ref"
+    ACTION_UNKNOWN = "unknown"
 
     def __init__(
         self,
@@ -149,21 +150,15 @@ class DumpRule:
         return True
 
 
-class Action:
+class RuleMatch:
     """
-    An action to apply to a database object.
+    The match between an Rule iand a database object.
 
     The object is closely connected to a DumpRule, but it extends on that,
     defining an operation taking into account the state of the database too.
     """
 
-    ACTION_DUMP = DumpRule.ACTION_DUMP
-    ACTION_SKIP = DumpRule.ACTION_SKIP
-    ACTION_ERROR = DumpRule.ACTION_ERROR
-    ACTION_REFERENCED = DumpRule.ACTION_REFERENCED
-    ACTION_UNKNOWN = "unknown"
-
-    def __init__(self, obj, action=ACTION_UNKNOWN):
+    def __init__(self, obj, action=DumpRule.ACTION_UNKNOWN):
         self.obj = obj
         self.action = action
 

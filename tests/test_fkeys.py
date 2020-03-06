@@ -15,7 +15,7 @@ def test_fkey_nav(dumper, db):
     dumper.add_config({"db_objects": [{"name": "table1"}]})
     dumper.perform_dump()
     objs = [
-        obj for obj, action in dumper.writer.dumped if isinstance(obj, Table)
+        obj for obj, match in dumper.writer.dumped if isinstance(obj, Table)
     ]
     assert len(objs) == 2
 
@@ -40,7 +40,7 @@ def test_fkey_nav_rec(dumper, db):
     dumper.add_config({"db_objects": [{"name": "table1"}]})
     dumper.perform_dump()
     objs = [
-        obj for obj, action in dumper.writer.dumped if isinstance(obj, Table)
+        obj for obj, match in dumper.writer.dumped if isinstance(obj, Table)
     ]
     assert len(objs) == 3
 
@@ -73,7 +73,7 @@ def test_fkey_nav_stops_on_skip(dumper, db):
     )
     dumper.perform_dump()
     objs = [
-        obj for obj, action in dumper.writer.dumped if isinstance(obj, Table)
+        obj for obj, match in dumper.writer.dumped if isinstance(obj, Table)
     ]
     assert len(objs) == 2
 
@@ -102,15 +102,15 @@ def test_two_referrers(dumper, db):
     dumper.add_config({"db_objects": [{"name": "table1"}]})
     dumper.perform_dump()
     objs = [
-        obj for obj, action in dumper.writer.dumped if isinstance(obj, Table)
+        obj for obj, match in dumper.writer.dumped if isinstance(obj, Table)
     ]
     assert len(objs) == 4
 
-    (action,) = [
-        action for obj, action in dumper.writer.dumped if obj.name == "table4"
+    (match,) = [
+        match for obj, match in dumper.writer.dumped if obj.name == "table4"
     ]
-    assert len(action.referenced_by) == 2
-    assert sorted(fkey.name for fkey in action.referenced_by) == [
+    assert len(match.referenced_by) == 2
+    assert sorted(fkey.name for fkey in match.referenced_by) == [
         "t24id_table4_id_fkey",
         "t34id_table4_id_fkey",
     ]
@@ -139,15 +139,15 @@ def test_no_endless_loop(dumper, db):
     dumper.add_config({"db_objects": [{"name": "table1"}]})
     dumper.perform_dump()
     objs = [
-        obj for obj, action in dumper.writer.dumped if isinstance(obj, Table)
+        obj for obj, match in dumper.writer.dumped if isinstance(obj, Table)
     ]
     assert len(objs) == 4
 
-    (action,) = [
-        action for obj, action in dumper.writer.dumped if obj.name == "table2"
+    (match,) = [
+        match for obj, match in dumper.writer.dumped if obj.name == "table2"
     ]
-    assert len(action.referenced_by) == 2
-    assert sorted(fkey.name for fkey in action.referenced_by) == [
+    assert len(match.referenced_by) == 2
+    assert sorted(fkey.name for fkey in match.referenced_by) == [
         "t12id_table2_id_fkey",
         "t42id_table2_id_fkey",
     ]

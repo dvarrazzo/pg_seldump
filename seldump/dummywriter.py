@@ -19,13 +19,13 @@ class DummyWriter(Writer):
     def end_dump(self):
         logger.debug("end of dump")
 
-    def dump_table(self, table, action):
+    def dump_table(self, table, match):
         logger.info("would dump %s %s", table.kind, table)
 
-    def dump_sequence(self, seq, action):
+    def dump_sequence(self, seq, match):
         logger.info("would dump %s %s", seq.kind, seq)
 
-    def dump_materialized_view(self, matview, action):
+    def dump_materialized_view(self, matview, match):
         logger.info("would dump %s %s", matview.kind, matview)
 
     def close(self):
