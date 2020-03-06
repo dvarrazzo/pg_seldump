@@ -24,7 +24,7 @@ def test_subqueries(dumper, db, fakeconn):
     )
     dumper.plan_dump()
 
-    q = dumper.actions[dumper.db.get("public", "table3").oid].query
+    q = dumper.matches[dumper.db.get("public", "table3").oid].query
     assert isinstance(q, query.Select)
     assert q.from_.source.name == "table3"
     assert isinstance(q.where, query.Exists)
@@ -76,7 +76,7 @@ db_objects:
     )
     dumper.plan_dump()
 
-    q = dumper.actions[dumper.db.get("public", "table4").oid].query
+    q = dumper.matches[dumper.db.get("public", "table4").oid].query
     assert isinstance(q, query.Select)
     assert q.from_.source.name == "table4"
     assert isinstance(q.where, query.Exists)

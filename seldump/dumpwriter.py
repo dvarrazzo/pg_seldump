@@ -33,11 +33,11 @@ class DumpWriter(Writer):
         if self.outfile is not sys.stdout:
             self.outfile.close()
 
-    def dump_table(self, table, action):
+    def dump_table(self, table, match):
         logger.info("writing %s %s", table.kind, table)
 
         self._begin_table(table)
-        self._copy_table(table, action)
+        self._copy_table(table, match)
         self._end_table(table)
 
     def _begin_table(self, table):
@@ -65,13 +65,13 @@ class DumpWriter(Writer):
                 % (self._copy_size, table, pretty)
             )
 
-    def _copy_table(self, table, action):
-        assert action.import_statement
-        assert action.copy_statement
+    def _copy_table(self, table, match):
+        assert match.import_statement
+        assert match.copy_statement
 
-        self.write(action.import_statement)
+        self.write(match.import_statement)
 
-        stmt = self.reader.obj_as_string(action.copy_statement)
+        stmt = self.reader.obj_as_string(match.copy_statement)
         logger.debug("exporting using: %s", stmt)
 
         self._begin_copy()
@@ -85,7 +85,7 @@ class DumpWriter(Writer):
 
         self._end_copy()
 
-    def dump_sequence(self, seq, action):
+    def dump_sequence(self, seq, match):
         logger.info("writing %s %s", seq.kind, seq)
 
         # Escape the sequence as identifier then as string to make a value
@@ -97,7 +97,7 @@ class DumpWriter(Writer):
         )
         self.write(stmt)
 
-    def dump_materialized_view(self, matview, action):
+    def dump_materialized_view(self, matview, match):
         logger.info("writing %s %s", matview.kind, matview)
 
         self.write(
