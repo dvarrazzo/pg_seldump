@@ -174,3 +174,47 @@ db_objects:
             assert cur.fetchall() == [(1, "i", 6), (2, "j", 5), (3, "k", 4)]
             cur.execute("select id, data from table4 order by id")
             assert cur.fetchall() == [(4, "r"), (5, "s"), (6, "t")]
+
+
+def test_dump_and_ref(db, dbdumper, psql):
+    """
+    Tables can have some records referred, some dumped.
+
+    table1:sel -> table2:sel ->table3
+    [where1]      [where2]
+    """
+    objs = db.create_sample(
+        3,
+        fkeys=[
+            ("table1", "t2id", "table2", "id"),
+            ("table2", "t3id", "table3", "id"),
+        ],
+    )
+    db.write_schema(objs)
+    db.fill_data("table3", "data", "ijkl")
+    db.fill_data("table2", ("data", "t3id"), "efgh", (1, 2, 3, 4))
+    db.fill_data("table1", ("data", "t2id"), "abcd", (1, 2, 3, 4))
+
+    dbdumper.reader.load_schema()
+    dbdumper.add_config(
+        """
+db_objects:
+- name: table1
+  filter: data = 'a'
+- name: table2
+  filter: data = 'g'
+"""
+    )
+    dbdumper.perform_dump()
+
+    db.truncate(dbdumper.db)
+    psql.load_file(dbdumper.writer.outfile)
+
+    with dbdumper.reader.connection as cnn:
+        with cnn.cursor() as cur:
+            cur.execute("select id, data, t2id from table1 order by id")
+            assert cur.fetchall() == [(1, "a", 1)]
+            cur.execute("select id, data, t3id from table2 order by id")
+            assert cur.fetchall() == [(1, "e", 1), (3, "g", 3)]
+            cur.execute("select id, data from table3 order by id")
+            assert cur.fetchall() == [(1, "i"), (3, "k")]
