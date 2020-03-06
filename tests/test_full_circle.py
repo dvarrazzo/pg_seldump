@@ -122,3 +122,55 @@ db_objects:
             ]
             cur.execute("select id, data, password from table2 order by id")
             assert cur.fetchall() == [(1, "y", None), (2, "y", None)]
+
+
+def test_two_dependencies(db, dbdumper, psql):
+    """
+    A fkey table can be referred by more than one table.
+
+        table1:dump ->
+                        table3:ref -> table4:ref
+        table2:dump ->
+    """
+
+    objs = db.create_sample(
+        4,
+        fkeys=[
+            ("table1", "t13id", "table3", "id"),
+            ("table2", "t23id", "table3", "id"),
+            ("table3", "t4id", "table4", "id"),
+        ],
+    )
+
+    db.write_schema(objs)
+    db.fill_data("table4", ("data"), "opqrst")
+    db.fill_data("table3", ("data", "t4id"), "ijklmn", reversed(range(1, 7)))
+    db.fill_data("table1", ("data", "t13id"), "abcd", (1, 2, 3, 4))
+    db.fill_data("table2", ("data", "t23id"), "efgh", (2, 3, 4, 5))
+
+    dbdumper.reader.load_schema()
+    dbdumper.add_config(
+        """
+db_objects:
+- name: table1
+  filter: data <= 'b'
+
+- name: table2
+  filter: data <= 'f'
+"""
+    )
+    dbdumper.perform_dump()
+
+    db.truncate(dbdumper.db)
+    psql.load_file(dbdumper.writer.outfile)
+
+    with dbdumper.reader.connection as cnn:
+        with cnn.cursor() as cur:
+            cur.execute("select id, data, t13id from table1 order by id")
+            assert cur.fetchall() == [(1, "a", 1), (2, "b", 2)]
+            cur.execute("select id, data, t23id from table2 order by id")
+            assert cur.fetchall() == [(1, "e", 2), (2, "f", 3)]
+            cur.execute("select id, data, t4id from table3 order by id")
+            assert cur.fetchall() == [(1, "i", 6), (2, "j", 5), (3, "k", 4)]
+            cur.execute("select id, data from table4 order by id")
+            assert cur.fetchall() == [(4, "r"), (5, "s"), (6, "t")]

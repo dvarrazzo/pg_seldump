@@ -83,7 +83,12 @@ class SqlQueryVisitor(NodeVisitor):
         assert self._level >= 0
 
     def indented(self, obj):
-        return sql.Composed([sql.SQL("\n"), sql.SQL(" " * self._level), obj])
+        if self._level:
+            return sql.Composed(
+                [sql.SQL("\n"), sql.SQL(" " * self._level), obj]
+            )
+        else:
+            return obj
 
     def visit_Select(self, select):
         cols = []
