@@ -111,11 +111,14 @@ class Dumper:
             action = self.get_action(obj)
             self.actions[obj.oid] = action
 
-        # Find unmentioned tables we need data to fulfill fkeys
+        # Find tables we need data to fulfill fkeys
         for obj in self.db:
             if not isinstance(obj, Table):
                 continue
-            if self.actions[obj.oid].action != Action.ACTION_DUMP:
+            if self.actions[obj.oid].action not in (
+                Action.ACTION_DUMP,
+                Action.ACTION_REFERENCED,
+            ):
                 continue
             self._add_referred_tables(obj)
 
@@ -208,11 +211,13 @@ class Dumper:
             if faction.action not in (
                 Action.ACTION_UNKNOWN,
                 Action.ACTION_REFERENCED,
+                Action.ACTION_DUMP,
             ):
                 # skip, dump, error: we don't have to navigate it tho
                 continue
 
-            faction.action = Action.ACTION_REFERENCED
+            if faction.action == Action.ACTION_UNKNOWN:
+                faction.action = Action.ACTION_REFERENCED
             if fkey not in faction.referenced_by:
                 faction.referenced_by.append(fkey)
 
@@ -392,6 +397,7 @@ class StatementsGenerator:
             or action.replace
             or action.filter
             or table.extcondition
+            or table.ref_fkeys
         ):
             self._set_copy_to_simple(table, action)
         else:
@@ -413,22 +419,18 @@ class StatementsGenerator:
         self._alias_seq = 0
         alias = self._get_alias()
 
-        where = self._get_filters(table, action)
-
-        if action.action == Action.ACTION_REFERENCED:
-            exists = []
-            for fkey in action.referenced_by:
-                exists.append(
-                    self._get_existence(
-                        table, fkey, parent=alias, seen={table.oid}
-                    )
+        where = [self._maybe_and(self._get_filters(table, action))]
+        for fkey in action.referenced_by:
+            where.append(
+                self._get_existence(
+                    table, fkey, parent=alias, seen={table.oid}
                 )
-            where.append(self._maybe_or(exists))
+            )
 
         return query.Select(
             columns=self._get_dump_attrs(table, action),
             from_=query.FromEntry(table, alias=alias),
-            where=self._maybe_and(where),
+            where=self._maybe_or(where),
         )
 
     def _get_existence(self, table, fkey, parent, seen):
@@ -436,27 +438,24 @@ class StatementsGenerator:
         alias = self._get_alias()
         ptable = self.db.get(oid=fkey.table_oid)
         paction = self.dumper.actions[fkey.table_oid]
-        where = [query.FkeyJoin(fkey=fkey, from_=alias, to=parent)]
-        where.extend(self._get_filters(ptable, paction))
+        where = self._get_filters(ptable, paction)
 
-        if paction.action == Action.ACTION_REFERENCED:
-            exists = []
-            for nfkey in paction.referenced_by:
-                if ptable.oid in seen:
-                    logger.warning("not going recursive for now")
-                    continue
-                exists.append(
-                    self._get_existence(
-                        ptable, nfkey, parent=alias, seen=seen | {ptable.oid}
-                    )
+        for nfkey in paction.referenced_by:
+            if ptable.oid in seen:
+                logger.warning("not going recursive for now")
+                continue
+            where.append(
+                self._get_existence(
+                    ptable, nfkey, parent=alias, seen=seen | {ptable.oid}
                 )
-            where.append(self._maybe_or(exists))
+            )
 
+        fkj = query.FkeyJoin(fkey=fkey, from_=alias, to=parent)
         return query.Exists(
             query=query.Select(
                 columns=[sql.SQL("1")],
                 from_=query.FromEntry(ptable, alias=alias),
-                where=self._maybe_and(where),
+                where=self._maybe_and([fkj, self._maybe_or(where)]),
             )
         )
 
