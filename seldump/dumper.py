@@ -213,7 +213,8 @@ class Dumper:
                 continue
 
             faction.action = Action.ACTION_REFERENCED
-            faction.referenced_by.append(fkey)
+            if fkey not in faction.referenced_by:
+                faction.referenced_by.append(fkey)
 
             self._add_referred_tables(faction.obj, seen)
 
