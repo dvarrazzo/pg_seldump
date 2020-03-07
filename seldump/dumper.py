@@ -401,10 +401,9 @@ class StatementsGenerator:
         ):
             self._set_copy_to_simple(table, match)
         else:
-            q = match.query = self.make_query(table, match)
-            stmt = query.SqlQueryVisitor().visit(q)
-            stmt = sql.SQL("copy (\n{}\n) to stdout").format(stmt)
-            match.copy_statement = stmt
+            match.query = self.make_query(table, match)
+            copy = query.CopyOut(match.query)
+            match.copy_statement = query.SqlQueryVisitor().visit(copy)
 
     def _set_copy_to_simple(self, table, match):
         attrs = self._get_dump_attrs(table, match)
