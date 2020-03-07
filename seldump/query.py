@@ -33,8 +33,7 @@ class CopyOut(QueryNode):
 
 
 class Select(Query):
-    def __init__(self, columns, from_, where, ctes=None):
-        self.ctes = ctes or []
+    def __init__(self, columns, from_, where=None):
         self.columns = columns
         self.from_ = from_
         self.where = where
