@@ -265,3 +265,57 @@ db_objects:
                 (4, "d", None, None),
                 (5, "e", 4, 3),
             ]
+
+
+def test_ref_to_self_ref(db, dbdumper, psql):
+    """
+    Records from a self referring table and external one are dumped
+
+    table1 -> table2 -+
+                 ^    |
+                 +----+
+    """
+    objs = db.create_sample(
+        2,
+        fkeys=[
+            ("table1", "t2id", "table2", "id"),
+            ("table2", "father_id", "table2", "id"),
+            ("table2", "mother_id", "table2", "id"),
+        ],
+    )
+    db.write_schema(objs)
+    db.fill_data(
+        "table2",
+        ("data", "father_id", "mother_id"),
+        "abcdefg",
+        [None, None, 1, None, 4, None, None],
+        [None, None, 2, None, 3, 3, None],
+    )
+    db.fill_data("table1", ("data", "t2id",), "ijk", (5, 6, 7))
+
+    dbdumper.reader.load_schema()
+    dbdumper.add_config(
+        """
+db_objects:
+- name: table1
+  filter: data = 'i' or data = 'k'
+"""
+    )
+    dbdumper.perform_dump()
+
+    db.truncate(dbdumper.db)
+    psql.load_file(dbdumper.writer.outfile)
+
+    with dbdumper.reader.connection as cnn:
+        with cnn.cursor() as cur:
+            cur.execute(
+                "select id, data, father_id, mother_id from table1 order by id"
+            )
+            assert cur.fetchall() == [
+                (1, "a", None, None),
+                (2, "b", None, None),
+                (3, "c", 1, 2),
+                (4, "d", None, None),
+                (5, "e", 4, 3),
+                (7, "g", None, None),
+            ]
