@@ -420,9 +420,11 @@ class StatementsGenerator:
 
         where = [self._maybe_and(self._get_filters(table, match))]
 
+        srfkeys = []
         for fkey in match.referenced_by:
             # self-referential fkeys are dealt with later
             if fkey.table_oid == fkey.ftable_oid:
+                srfkeys.append(fkey)
                 continue
             where.append(
                 self._get_existence(
@@ -431,11 +433,6 @@ class StatementsGenerator:
             )
 
         # if there are self-referential fkeys q is the base of a recursive cte
-        srfkeys = [
-            fkey
-            for fkey in match.referenced_by
-            if fkey.table_oid == fkey.ftable_oid
-        ]
         if not srfkeys:
             q = query.Select(
                 columns=self._get_dump_attrs(table, match),
@@ -443,28 +440,27 @@ class StatementsGenerator:
                 where=self._maybe_or(where),
             )
         else:
-            ialias = self._get_alias()
+            rec_alias = alias + "r"
             q = query.Select(
                 columns=self._get_dump_attrs(table, match),
                 from_=query.FromEntry(
                     query.RecursiveCTE(
-                        name=alias,
+                        name=rec_alias,
                         base_query=query.Select(
                             columns=[
-                                sql.SQL("{}.*").format(sql.Identifier(ialias))
+                                sql.SQL("{}.*").format(sql.Identifier(alias))
                             ],
-                            from_=query.FromEntry(table, alias=ialias),
+                            from_=query.FromEntry(table, alias=alias),
                             where=self._maybe_or(where),
                         ),
                         rec_cond=self._maybe_or(
                             [
-                                query.FkeyJoin(fkey, alias, ialias)
+                                query.FkeyJoin(fkey, rec_alias, alias)
                                 for fkey in srfkeys
                             ]
                         ),
                     ),
                 ),
-                where=None,
             )
 
         return q

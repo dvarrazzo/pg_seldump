@@ -271,25 +271,28 @@ def test_ref_to_self_ref(db, dbdumper, psql):
     """
     Records from a self referring table and external one are dumped
 
-    table1 -> table2 -+
+    table1 -> table2 -+ -> table3
                  ^    |
                  +----+
     """
     objs = db.create_sample(
-        2,
+        3,
         fkeys=[
             ("table1", "t2id", "table2", "id"),
             ("table2", "father_id", "table2", "id"),
             ("table2", "mother_id", "table2", "id"),
+            ("table2", "t3id", "table3", "id"),
         ],
     )
     db.write_schema(objs)
+    db.fill_data("table3", ("data",), "stuvwxyz")
     db.fill_data(
         "table2",
-        ("data", "father_id", "mother_id"),
-        "abcdefg",
-        [None, None, 1, None, 4, None, None],
-        [None, None, 2, None, 3, 3, None],
+        ("data", "father_id", "mother_id", "t3id"),
+        "abcdefgh",
+        [None, None, 1, None, 4, None, None, 6],
+        [None, None, 2, None, 3, 3, None, None],
+        range(1, 9),
     )
     db.fill_data("table1", ("data", "t2id",), "ijk", (5, 6, 7))
 
@@ -298,7 +301,10 @@ def test_ref_to_self_ref(db, dbdumper, psql):
         """
 db_objects:
 - name: table1
-  filter: data = 'i' or data = 'k'
+  filter: data = any('{i,k}')
+- name: table2
+  action: ref
+  no_columns: []
 """
     )
     dbdumper.perform_dump()
@@ -309,7 +315,7 @@ db_objects:
     with dbdumper.reader.connection as cnn:
         with cnn.cursor() as cur:
             cur.execute(
-                "select id, data, father_id, mother_id from table1 order by id"
+                "select id, data, father_id, mother_id from table2 order by id"
             )
             assert cur.fetchall() == [
                 (1, "a", None, None),
@@ -318,4 +324,14 @@ db_objects:
                 (4, "d", None, None),
                 (5, "e", 4, 3),
                 (7, "g", None, None),
+            ]
+
+            cur.execute("select id, data from table3 order by id")
+            assert cur.fetchall() == [
+                (1, "s"),
+                (2, "t"),
+                (3, "u"),
+                (4, "v"),
+                (5, "w"),
+                (7, "y"),
             ]
