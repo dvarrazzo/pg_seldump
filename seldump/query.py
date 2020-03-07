@@ -27,6 +27,11 @@ class Query(QueryNode):
     pass
 
 
+class CopyOut(QueryNode):
+    def __init__(self, source):
+        self.source = source
+
+
 class Select(Query):
     def __init__(self, columns, from_, where, ctes=None):
         self.ctes = ctes or []
@@ -99,6 +104,15 @@ class SqlQueryVisitor(NodeVisitor):
             )
         else:
             return obj
+
+    def visit_CopyOut(self, copy):
+        parts = []
+        parts.append(self.indented(sql.SQL("copy (")))
+        self.indent()
+        parts.append(self.indented(self.visit(copy.source)))
+        self.dedent()
+        parts.append(self.indented(sql.SQL(") to stdout")))
+        return sql.SQL(" ").join(parts)
 
     def visit_Select(self, select):
         parts = []
