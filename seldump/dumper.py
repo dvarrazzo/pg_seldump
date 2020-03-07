@@ -457,7 +457,10 @@ class StatementsGenerator:
                             where=self._maybe_or(where),
                         ),
                         rec_cond=self._maybe_or(
-                            [query.FkeyJoin(fkey, alias, ialias)]
+                            [
+                                query.FkeyJoin(fkey, alias, ialias)
+                                for fkey in srfkeys
+                            ]
                         ),
                     ),
                 ),
