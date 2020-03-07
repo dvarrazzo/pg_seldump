@@ -28,10 +28,18 @@ class Query(QueryNode):
 
 
 class Select(Query):
-    def __init__(self, columns, from_, where):
+    def __init__(self, columns, from_, where, ctes=None):
+        self.ctes = ctes or []
         self.columns = columns
         self.from_ = from_
         self.where = where
+
+
+class RecursiveCTE(Query):
+    def __init__(self, name, base_query, rec_cond):
+        self.name = name
+        self.base_query = base_query
+        self.rec_cond = rec_cond
 
 
 class Union(Query):
@@ -74,16 +82,18 @@ class FkeyJoin(Predicate):
 class SqlQueryVisitor(NodeVisitor):
     def __init__(self):
         self._level = 0
+        self._first = True
 
     def indent(self):
         self._level += 4
+        self._first = False
 
     def dedent(self):
         self._level -= 4
         assert self._level >= 0
 
     def indented(self, obj):
-        if self._level:
+        if self._level or not self._first:
             return sql.Composed(
                 [sql.SQL("\n"), sql.SQL(" " * self._level), obj]
             )
@@ -91,23 +101,49 @@ class SqlQueryVisitor(NodeVisitor):
             return obj
 
     def visit_Select(self, select):
-        cols = []
-        for col in select.columns:
-            if isinstance(col, sql.Composable):
-                cols.append(col)
-            elif isinstance(col, str):
-                cols.append(sql.Identifier(col))
-            else:
-                raise TypeError("bad column: %s" % col)
-
         parts = []
+        if isinstance(select.from_.source, RecursiveCTE):
+            parts.append(sql.SQL("with"))
+            parts.append(self.visit(select.from_))
+
         parts.append(self.indented(sql.SQL("select")))
-        parts.append(sql.SQL(", ").join(cols))
+        parts.append(self._cols_list(select))
         parts.append(self.indented(sql.SQL("from")))
-        parts.append(self.visit(select.from_))
+
+        if not isinstance(select.from_.source, RecursiveCTE):
+            parts.append(self.visit(select.from_))
+        else:
+            parts.append(sql.Identifier(select.from_.source.name))
+
         if select.where:
             parts.append(self.indented(sql.SQL("where")))
             parts.append(self.visit(select.where))
+
+        return sql.SQL(" ").join(parts)
+
+    def visit_RecursiveCTE(self, cte):
+        parts = []
+        parts.append(sql.SQL("recursive"))
+        parts.append(sql.Identifier(cte.name))
+        parts.append(sql.SQL("as ("))
+        self.indent()
+
+        parts.append(self.visit(cte.base_query))
+
+        parts.append(self.indented(sql.SQL("union")))
+
+        parts.append(self.indented(sql.SQL("select")))
+        parts.append(self._cols_list(cte.base_query))
+        parts.append(self.indented(sql.SQL("from")))
+        assert cte.base_query.from_.alias
+        parts.append(self.visit(cte.base_query.from_))
+        parts.append(self.indented(sql.SQL("join")))
+        parts.append(sql.Identifier(cte.name))
+        parts.append(sql.SQL("on"))
+        parts.append(self.visit(cte.rec_cond))
+
+        self.dedent()
+        parts.append(self.indented(sql.SQL(")")))
 
         return sql.SQL(" ").join(parts)
 
@@ -166,6 +202,18 @@ class SqlQueryVisitor(NodeVisitor):
 
     def visit_Composable(self, obj):
         return obj
+
+    def _cols_list(self, select):
+        cols = []
+        for col in select.columns:
+            if isinstance(col, sql.Composable):
+                cols.append(col)
+            elif isinstance(col, str):
+                cols.append(sql.Identifier(col))
+            else:
+                raise TypeError("bad column: %s" % col)
+
+        return sql.SQL(", ").join(cols)
 
 
 class PrintQueryVisitor(NodeVisitor):

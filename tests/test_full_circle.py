@@ -218,3 +218,34 @@ db_objects:
             assert cur.fetchall() == [(1, "e", 1), (3, "g", 3)]
             cur.execute("select id, data from table3 order by id")
             assert cur.fetchall() == [(1, "i"), (3, "k")]
+
+
+def test_self_ref(db, dbdumper, psql):
+    """
+    Self-referring tables can get other records dumped.
+    """
+    objs = db.create_sample(
+        1, fkeys=[("table1", "parent_id", "table1", "id")],
+    )
+    db.write_schema(objs)
+    db.fill_data("table1", ("data", "parent_id"), "abcde", [None, 1, 2, 1, 4])
+
+    dbdumper.reader.load_schema()
+    dbdumper.add_config(
+        """
+db_objects:
+- name: table1
+  filter: data = 'e'
+"""
+    )
+    dbdumper.perform_dump()
+
+    db.truncate(dbdumper.db)
+    psql.load_file(dbdumper.writer.outfile)
+
+    with dbdumper.reader.connection as cnn:
+        with cnn.cursor() as cur:
+            cur.execute(
+                "select id, data, parent_id from table1 order by id desc"
+            )
+            assert cur.fetchall() == [(5, "e", 4), (4, "d", 1), (1, "a", None)]

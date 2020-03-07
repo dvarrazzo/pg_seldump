@@ -200,12 +200,6 @@ class Dumper:
         seen.add(table.oid)
 
         for fkey in table.fkeys:
-            if fkey.table_oid == fkey.ftable_oid:
-                logger.warning(
-                    "not dealing with self-referencing fkey %s now", fkey.name
-                )
-                continue
-
             logger.debug("found fkey %s", fkey.name)
             fmatch = self.matches[fkey.ftable_oid]
             if fmatch.action not in (
@@ -426,18 +420,52 @@ class StatementsGenerator:
         alias = self._get_alias()
 
         where = [self._maybe_and(self._get_filters(table, match))]
+
         for fkey in match.referenced_by:
+            # self-referential fkeys are dealt with later
+            if fkey.table_oid == fkey.ftable_oid:
+                continue
             where.append(
                 self._get_existence(
                     table, fkey, parent=alias, seen={table.oid}
                 )
             )
 
-        return query.Select(
-            columns=self._get_dump_attrs(table, match),
-            from_=query.FromEntry(table, alias=alias),
-            where=self._maybe_or(where),
-        )
+        # if there are self-referential fkeys q is the base of a recursive cte
+        srfkeys = [
+            fkey
+            for fkey in match.referenced_by
+            if fkey.table_oid == fkey.ftable_oid
+        ]
+        if not srfkeys:
+            q = query.Select(
+                columns=self._get_dump_attrs(table, match),
+                from_=query.FromEntry(table, alias=alias),
+                where=self._maybe_or(where),
+            )
+        else:
+            ialias = self._get_alias()
+            q = query.Select(
+                columns=self._get_dump_attrs(table, match),
+                from_=query.FromEntry(
+                    query.RecursiveCTE(
+                        name=alias,
+                        base_query=query.Select(
+                            columns=[
+                                sql.SQL("{}.*").format(sql.Identifier(ialias))
+                            ],
+                            from_=query.FromEntry(table, alias=ialias),
+                            where=self._maybe_or(where),
+                        ),
+                        rec_cond=self._maybe_or(
+                            [query.FkeyJoin(fkey, alias, ialias)]
+                        ),
+                    ),
+                ),
+                where=None,
+            )
+
+        return q
 
     def _get_existence(self, table, fkey, parent, seen):
         assert fkey.ftable_oid == table.oid
