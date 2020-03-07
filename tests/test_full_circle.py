@@ -225,10 +225,20 @@ def test_self_ref(db, dbdumper, psql):
     Self-referring tables can get other records dumped.
     """
     objs = db.create_sample(
-        1, fkeys=[("table1", "parent_id", "table1", "id")],
+        1,
+        fkeys=[
+            ("table1", "father_id", "table1", "id"),
+            ("table1", "mother_id", "table1", "id"),
+        ],
     )
     db.write_schema(objs)
-    db.fill_data("table1", ("data", "parent_id"), "abcde", [None, 1, 2, 1, 4])
+    db.fill_data(
+        "table1",
+        ("data", "father_id", "mother_id"),
+        "abcdef",
+        [None, None, 1, None, 4, None],
+        [None, None, 2, None, 3, 3],
+    )
 
     dbdumper.reader.load_schema()
     dbdumper.add_config(
@@ -246,6 +256,12 @@ db_objects:
     with dbdumper.reader.connection as cnn:
         with cnn.cursor() as cur:
             cur.execute(
-                "select id, data, parent_id from table1 order by id desc"
+                "select id, data, father_id, mother_id from table1 order by id"
             )
-            assert cur.fetchall() == [(5, "e", 4), (4, "d", 1), (1, "a", None)]
+            assert cur.fetchall() == [
+                (1, "a", None, None),
+                (2, "b", None, None),
+                (3, "c", 1, 2),
+                (4, "d", None, None),
+                (5, "e", 4, 3),
+            ]
