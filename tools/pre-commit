@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Project pre-commit hooks
+#
+# The tools used are available after you run tox for the first time.
+#
+# You may want to symlink this file to your `.git/hooks/` directory.
+#
+# Commits that fail this script *will* fail the CI checks.
+
+BLACK=.tox/black/bin/black 
+FLAKE8=.tox/flake8/bin/flake8 
+
+# check you are not committing a file where you tagged something with NOCOMMIT
+git diff --cached | grep -C2 -e "^\+.*NOCOMMIT"
+if [[ $? == 0 ]]; then
+	echo "Y U COMMIT!!1"
+	exit 1
+fi
+
+# find Python files changed in the commit
+files=$(git status --porcelain | grep -e "^M.*\.py$" | cut -c 4-)
+if [ -z "$files" ]; then
+    exit 0;
+fi
+
+"$BLACK" --check --quiet $files
+if [[ $? != 0 ]]; then
+	echo "Please run black on the files changed."
+    echo "$files" | xargs echo "
+    $BLACK"
+    echo ""
+	exit 1
+fi
+
+"$FLAKE8" $files
+if [[ $? != 0 ]]; then
+	echo "Flake8 didn't like your commit: please fix it.
+"
+	exit 1
+fi
