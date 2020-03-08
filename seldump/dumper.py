@@ -469,10 +469,10 @@ class StatementsGenerator:
         assert fkey.ftable_oid == table.oid
         alias = self._get_alias()
         ptable = self.db.get(oid=fkey.table_oid)
-        paction = self.dumper.matches[fkey.table_oid]
-        where = self._get_filters(ptable, paction)
+        pmatch = self.dumper.matches[fkey.table_oid]
+        where = self._get_filters(ptable, pmatch)
 
-        for nfkey in paction.referenced_by:
+        for nfkey in pmatch.referenced_by:
             if ptable.oid in seen:
                 logger.warning("not going recursive for now")
                 continue
