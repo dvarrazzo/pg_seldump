@@ -416,9 +416,39 @@ class StatementsGenerator:
         Generate the query to execute the desired `match`.
         """
         self._alias_seq = 0
-        alias = self._get_alias()
 
-        where = [self._maybe_and(self._get_filters(table, match))]
+        select = self._get_select(table, match)
+        select.columns = self._get_dump_attrs(table, match)
+        return select
+
+    def _get_existence(self, table, fkey, parent, seen):
+        """
+        Return the Exists predicate to limit the query to a fkey content.
+        """
+        assert fkey.ftable_oid == table.oid
+        ptable = self.db.get(oid=fkey.table_oid)
+        pmatch = self.dumper.matches[fkey.table_oid]
+        subsel = self._get_select(ptable, pmatch, seen=seen)
+        fkj = query.FkeyJoin(fkey=fkey, from_=subsel.from_.alias, to=parent)
+
+        return query.Exists(
+            query=query.Select(
+                columns=[sql.SQL("1")],
+                from_=subsel.from_,
+                where=self._maybe_and([fkj, subsel.where]),
+            )
+        )
+
+    def _get_select(self, table, match, seen=None):
+        """
+        Return the part of the select common to subqueries and external ones.
+
+        The returned select has the attribute list empty: the caller will have
+        to populate it.
+        """
+        alias = self._get_alias()
+        where = [self._get_filters(table, match)]
+        seen = (seen or set()) | {table.oid}
 
         srfkeys = []
         for fkey in match.referenced_by:
@@ -426,70 +456,38 @@ class StatementsGenerator:
             if fkey.table_oid == fkey.ftable_oid:
                 srfkeys.append(fkey)
                 continue
+            elif fkey.table_oid in seen:
+                logger.warning("not going recursive for now")
+                continue
             where.append(
-                self._get_existence(
-                    table, fkey, parent=alias, seen={table.oid}
-                )
+                self._get_existence(table, fkey, parent=alias, seen=seen)
             )
 
+        q = query.Select(
+            columns=[],
+            from_=query.FromEntry(table, alias=alias),
+            where=self._maybe_or(where),
+        )
+
         # if there are self-referential fkeys q is the base of a recursive cte
-        if not srfkeys:
-            q = query.Select(
-                columns=self._get_dump_attrs(table, match),
-                from_=query.FromEntry(table, alias=alias),
-                where=self._maybe_or(where),
-            )
-        else:
+        if srfkeys:
             rec_alias = alias + "r"
+            rec_cond = self._maybe_or(
+                [query.FkeyJoin(fkey, rec_alias, alias) for fkey in srfkeys]
+            )
+
+            q.columns = [sql.SQL("{}.*").format(sql.Identifier(alias))]
             q = query.Select(
-                columns=self._get_dump_attrs(table, match),
+                columns=[],
                 from_=query.FromEntry(
                     query.RecursiveCTE(
-                        name=rec_alias,
-                        base_query=query.Select(
-                            columns=[
-                                sql.SQL("{}.*").format(sql.Identifier(alias))
-                            ],
-                            from_=query.FromEntry(table, alias=alias),
-                            where=self._maybe_or(where),
-                        ),
-                        rec_cond=self._maybe_or(
-                            [
-                                query.FkeyJoin(fkey, rec_alias, alias)
-                                for fkey in srfkeys
-                            ]
-                        ),
+                        name=rec_alias, base_query=q, rec_cond=rec_cond
                     ),
+                    alias=rec_alias,
                 ),
             )
 
         return q
-
-    def _get_existence(self, table, fkey, parent, seen):
-        assert fkey.ftable_oid == table.oid
-        alias = self._get_alias()
-        ptable = self.db.get(oid=fkey.table_oid)
-        pmatch = self.dumper.matches[fkey.table_oid]
-        where = self._get_filters(ptable, pmatch)
-
-        for nfkey in pmatch.referenced_by:
-            if ptable.oid in seen:
-                logger.warning("not going recursive for now")
-                continue
-            where.append(
-                self._get_existence(
-                    ptable, nfkey, parent=alias, seen=seen | {ptable.oid}
-                )
-            )
-
-        fkj = query.FkeyJoin(fkey=fkey, from_=alias, to=parent)
-        return query.Exists(
-            query=query.Select(
-                columns=[sql.SQL("1")],
-                from_=query.FromEntry(ptable, alias=alias),
-                where=self._maybe_and([fkj, self._maybe_or(where)]),
-            )
-        )
 
     def _get_filters(self, table, match):
         rv = []
@@ -502,7 +500,7 @@ class StatementsGenerator:
         if match.filter:
             rv.append(sql.SQL(match.filter.strip()))
 
-        return rv
+        return self._maybe_and(rv)
 
     def _get_dump_attrs(self, table, match):
         rv = []

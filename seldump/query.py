@@ -170,8 +170,9 @@ class SqlQueryVisitor(NodeVisitor):
         else:
             raise TypeError("can't deal with %s in a 'from'", from_.source)
 
-        if from_.alias:
+        if from_.alias and not isinstance(from_.source, RecursiveCTE):
             rv = sql.SQL("{} as {}").format(rv, sql.Identifier(from_.alias))
+
         return rv
 
     def visit_Exists(self, exists):
