@@ -108,7 +108,7 @@ class SqlQueryVisitor(NodeVisitor):
         parts = []
         parts.append(self.indented(sql.SQL("copy (")))
         self.indent()
-        parts.append(self.indented(self.visit(copy.source)))
+        parts.append(self.visit(copy.source))
         self.dedent()
         parts.append(self.indented(sql.SQL(") to stdout")))
         return sql.SQL(" ").join(parts)
@@ -116,7 +116,7 @@ class SqlQueryVisitor(NodeVisitor):
     def visit_Select(self, select):
         parts = []
         if isinstance(select.from_.source, RecursiveCTE):
-            parts.append(sql.SQL("with"))
+            parts.append(self.indented(sql.SQL("with")))
             parts.append(self.visit(select.from_))
 
         parts.append(self.indented(sql.SQL("select")))
