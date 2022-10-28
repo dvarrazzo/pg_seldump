@@ -60,6 +60,11 @@ setup(
     license="BSD",
     python_requires=">=3.5",
     install_requires=requirements,
+    extras_require={
+        "test": [
+            "pytest >= 5.3,<6",
+        ],
+    },
     packages=["seldump"],
     package_data={"seldump": ["schema/*.yaml"]},
     entry_points={"console_scripts": ["pg_seldump = seldump.cli:script"]},
