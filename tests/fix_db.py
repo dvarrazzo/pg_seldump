@@ -5,10 +5,8 @@ import subprocess as sp
 from collections import OrderedDict, defaultdict
 
 import pytest
-import psycopg2
-from psycopg2 import sql
-from psycopg2 import extensions as ext
-from psycopg2.extras import execute_values
+import psycopg
+from psycopg import sql
 
 from seldump import consts
 from seldump.database import Database
@@ -40,22 +38,22 @@ def dsn(request):
 @pytest.fixture()
 def conn(dsn):
     """Return a database connection connected to `--test-dsn`."""
-    cnn = psycopg2.connect(dsn)
+    cnn = psycopg.connect(dsn)
     yield cnn
     cnn.close()
 
 
 @pytest.fixture()
-def fakeconn():
+def fakeconn(monkeypatch):
     """Return a fake connection useful to pass to Composable.as_string()."""
 
-    def fake_quote_ident(s, context):
-        return '"%s"' % s.replace('"', '""')
+    def fake_as_bytes(self, context):
+        return b".".join(
+            b'"%b"' % n.replace('"', '""').encode() for n in self._obj
+        )
 
-    orig_quote_ident = ext.quote_ident
-    ext.quote_ident = fake_quote_ident
+    monkeypatch.setattr(sql.Identifier, "as_bytes", fake_as_bytes)
     yield None
-    ext.quote_ident = orig_quote_ident
 
 
 @pytest.fixture()
@@ -86,7 +84,7 @@ class TestingDatabase:
             raise TypeError("target not set")
         elif isinstance(self.target, DbReader):
             return self.target.connection
-        elif isinstance(self.target, ext.connection):
+        elif isinstance(self.target, psycopg.Connection):
             return self.target
         else:
             raise TypeError(
@@ -177,8 +175,8 @@ order by 1, 2
         """
         Clear tables, reset sequences.
         """
-        with self.connection as conn:
-            with conn.cursor() as cur:
+        with self.connection.transaction():
+            with self.connection.cursor() as cur:
                 for obj in objs:
                     if isinstance(obj, Table):
                         cur.execute(
@@ -239,13 +237,16 @@ order by 1, 2
                 "got %s column names but %s data columns"
                 % (len(columns), len(datacols))
             )
-        stmt = sql.SQL("insert into {} ({}) values %s").format(
+
+        stmt = sql.SQL("copy {} ({}) from stdin").format(
             sql.Identifier(table),
             sql.SQL(", ").join(map(sql.Identifier, columns)),
         )
-        with self.connection as conn:
-            with conn.cursor() as curs:
-                execute_values(curs, stmt, zip(*datacols))
+        with self.connection.transaction():
+            with self.connection.cursor() as curs:
+                with curs.copy(stmt) as copy:
+                    for rec in zip(*datacols):
+                        copy.write_row(rec)
 
     def _create_table(self, cnn, db, table):
         cols = []

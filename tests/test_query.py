@@ -1,4 +1,4 @@
-from psycopg2 import sql
+from psycopg import sql
 
 from seldump import query
 from seldump.database import Database

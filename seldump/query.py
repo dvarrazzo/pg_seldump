@@ -7,12 +7,12 @@ dynamically.
 
 You can create queries by nesting `QueryNode` subclasses nodes, and use
 `SqlQueryVisitor.visit()` to return the SQL statement as
-`psycopg2.sql.Composable` object.
+`psycopg.sql.Composable` object.
 
 This file is part of pg_seldump.
 """
 
-from psycopg2 import sql
+from psycopg import sql
 
 from .nodes import NodeVisitor
 from .dbobjects import Table

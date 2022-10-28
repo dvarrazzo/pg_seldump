@@ -9,9 +9,9 @@ This file is part of pg_seldump.
 import logging
 from functools import lru_cache
 
-import psycopg2
-from psycopg2 import sql
-from psycopg2.extras import NamedTupleCursor
+import psycopg
+from psycopg import sql
+from psycopg.rows import namedtuple_row
 
 from .consts import DUMPABLE_KINDS, KIND_TABLE, KIND_PART_TABLE, REVKINDS
 from .reader import Reader
@@ -31,7 +31,7 @@ class DbReader(Reader):
     def connection(self):
         logger.debug("connecting to '%s'", self.dsn)
         try:
-            cnn = psycopg2.connect(self.dsn, cursor_factory=NamedTupleCursor)
+            cnn = psycopg.connect(self.dsn, row_factory=namedtuple_row)
         except Exception as e:
             raise DumpError("error connecting to the database: %s" % e)
 
@@ -222,7 +222,9 @@ order by name
 
     def copy(self, stmt, file):
         """
-        Run a copy statement.
+        Run a copy... to stdout statement.
         """
         with self.cursor() as cur:
-            cur.copy_expert(stmt, file)
+            with cur.copy(stmt) as copy:
+                for data in copy:
+                    file.write(data)

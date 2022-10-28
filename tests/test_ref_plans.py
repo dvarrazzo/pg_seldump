@@ -39,7 +39,7 @@ def test_subqueries(dumper, db, fakeconn):
     assert sq.from_.source.name == "table1"
     assert isinstance(sq.where, query.And)
     assert sq.where.conds[0].fkey.name == "t2id_table2_id_fkey"
-    assert sq.where.conds[1].string == "data='aaa'"
+    assert sq.where.conds[1]._obj == "data='aaa'"
 
     stmt = query.SqlQueryVisitor().visit(q)
     assert stmt.as_string(fakeconn)
@@ -95,7 +95,7 @@ db_objects:
         "t13id_table3_id_fkey",
         "t23id_table3_id_fkey",
     ]
-    assert [sq.where.conds[1].string for sq in sqs] == [
+    assert [sq.where.conds[1]._obj for sq in sqs] == [
         "data <= 'b'",
         "data <= 'f'",
     ]

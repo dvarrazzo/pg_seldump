@@ -10,7 +10,7 @@ import re
 import logging
 from operator import attrgetter
 
-from psycopg2 import sql
+from psycopg import sql
 
 from . import query
 from .config import load_yaml, get_config_errors
@@ -311,7 +311,7 @@ class StatementsGenerator:
     An object which can generate SQL statements out of the dump state.
 
     SQL statements are first generates into an intermediate structure (as
-    seldump.query objects), then converted into a query (as psycopg2.sql
+    seldump.query objects), then converted into a query (as psycopg.sql
     objects) thanks to the SqlQueryVisitor.
     """
 

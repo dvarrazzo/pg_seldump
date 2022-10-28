@@ -46,10 +46,12 @@ def main():
     reader.load_schema()
     dumper.plan_dump()
 
+    should_close = False
     if not opt.test:
         if opt.outfile != "-":
             try:
                 outfile = open(opt.outfile, "wb")
+                should_close = True
             except Exception as e:
                 raise ConfigError(
                     "couldn't open %s for writing: %s" % (outfile, e)
@@ -63,7 +65,8 @@ def main():
     try:
         dumper.run_dump()
     finally:
-        writer.close()
+        if should_close:
+            outfile.close()
 
 
 def script():

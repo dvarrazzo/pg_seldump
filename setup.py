@@ -45,7 +45,7 @@ Topic :: Utilities
 """
 
 requirements = """
-psycopg2>=2.8,<2.9
+psycopg>=3.1
 jsonschema>=3.2,<3.3
 PyYAML>=3,<5.4
 """

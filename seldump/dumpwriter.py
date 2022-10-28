@@ -5,13 +5,12 @@ Writing to a dump file.
 This file is part of pg_seldump.
 """
 
-import sys
 import math
 import logging
 from datetime import datetime
 
-import psycopg2
-from psycopg2 import sql
+import psycopg
+from psycopg import sql
 
 from .consts import PROJECT_URL, VERSION
 from .writer import Writer
@@ -28,10 +27,6 @@ class DumpWriter(Writer):
         self._start_time = None
         self._copy_start_pos = None
         self._copy_size = None
-
-    def close(self):
-        if self.outfile is not sys.stdout:
-            self.outfile.close()
 
     def dump_table(self, table, match):
         logger.info("writing %s %s", table.kind, table)
@@ -77,7 +72,7 @@ class DumpWriter(Writer):
         self._begin_copy()
         try:
             self.reader.copy(stmt, self.outfile)
-        except psycopg2.DatabaseError as e:
+        except psycopg.DatabaseError as e:
             logger.error("failed copy using statement:\n\n%s\n", stmt)
             raise DumpError("failed to copy from table %s: %s" % (table, e))
         else:

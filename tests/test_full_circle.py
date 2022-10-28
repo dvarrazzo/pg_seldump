@@ -42,8 +42,9 @@ db_objects:
     db.truncate(dbdumper.db)
     psql.load_file(dbdumper.writer.outfile)
 
-    with dbdumper.reader.connection as cnn:
-        with cnn.cursor() as cur:
+    conn = dbdumper.reader.connection
+    with conn.transaction():
+        with conn.cursor() as cur:
             cur.execute("select id, data, t2id from table1 order by id")
             assert cur.fetchall() == [(1, "a", 1), (2, "b", 1), (3, "c", 2)]
             cur.execute("select id, data, t3id from table2 order by id")
@@ -110,8 +111,9 @@ db_objects:
     db.truncate(dbdumper.db)
     psql.load_file(dbdumper.writer.outfile)
 
-    with dbdumper.reader.connection as cnn:
-        with cnn.cursor() as cur:
+    conn = dbdumper.reader.connection
+    with conn.transaction():
+        with conn.cursor() as cur:
             cur.execute(
                 "select id, data, password, t2id from table1 order by id"
             )
@@ -164,8 +166,9 @@ db_objects:
     db.truncate(dbdumper.db)
     psql.load_file(dbdumper.writer.outfile)
 
-    with dbdumper.reader.connection as cnn:
-        with cnn.cursor() as cur:
+    conn = dbdumper.reader.connection
+    with conn.transaction():
+        with conn.cursor() as cur:
             cur.execute("select id, data, t13id from table1 order by id")
             assert cur.fetchall() == [(1, "a", 1), (2, "b", 2)]
             cur.execute("select id, data, t23id from table2 order by id")
@@ -210,8 +213,9 @@ db_objects:
     db.truncate(dbdumper.db)
     psql.load_file(dbdumper.writer.outfile)
 
-    with dbdumper.reader.connection as cnn:
-        with cnn.cursor() as cur:
+    conn = dbdumper.reader.connection
+    with conn.transaction():
+        with conn.cursor() as cur:
             cur.execute("select id, data, t2id from table1 order by id")
             assert cur.fetchall() == [(1, "a", 1)]
             cur.execute("select id, data, t3id from table2 order by id")
@@ -253,8 +257,9 @@ db_objects:
     db.truncate(dbdumper.db)
     psql.load_file(dbdumper.writer.outfile)
 
-    with dbdumper.reader.connection as cnn:
-        with cnn.cursor() as cur:
+    conn = dbdumper.reader.connection
+    with conn.transaction():
+        with conn.cursor() as cur:
             cur.execute(
                 "select id, data, father_id, mother_id from table1 order by id"
             )
@@ -312,8 +317,9 @@ db_objects:
     db.truncate(dbdumper.db)
     psql.load_file(dbdumper.writer.outfile)
 
-    with dbdumper.reader.connection as cnn:
-        with cnn.cursor() as cur:
+    conn = dbdumper.reader.connection
+    with conn.transaction():
+        with conn.cursor() as cur:
             cur.execute(
                 "select id, data, father_id, mother_id from table2 order by id"
             )

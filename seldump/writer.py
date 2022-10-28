@@ -32,7 +32,3 @@ class Writer(ABC):
     @abstractmethod
     def dump_materialized_view(self, matview, match):
         pass
-
-    @abstractmethod
-    def close(self):
-        pass

@@ -7,7 +7,7 @@ This file is part of pg_seldump.
 
 import re
 
-from psycopg2 import sql
+from psycopg import sql
 
 from . import consts
 
