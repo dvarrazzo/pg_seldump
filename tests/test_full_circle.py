@@ -80,11 +80,7 @@ def test_columns_edit(db, dbdumper, psql):
     db.write_schema(objs)
     db.fill_data("table2", ("data", "password"), "efgh", ["pass"] * 4)
     db.fill_data(
-        "table1",
-        ("data", "t2id", "password"),
-        "abcd",
-        (1, 1, 2, 3),
-        ["pass"] * 4,
+        "table1", ("data", "t2id", "password"), "abcd", (1, 1, 2, 3), ["pass"] * 4
     )
 
     dbdumper.reader.load_schema()
@@ -114,9 +110,7 @@ db_objects:
     conn = dbdumper.reader.connection
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute(
-                "select id, data, password, t2id from table1 order by id"
-            )
+            cur.execute("select id, data, password, t2id from table1 order by id")
             assert cur.fetchall() == [
                 (1, "x", None, 1),
                 (2, "x", None, 1),
@@ -260,9 +254,7 @@ db_objects:
     conn = dbdumper.reader.connection
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute(
-                "select id, data, father_id, mother_id from table1 order by id"
-            )
+            cur.execute("select id, data, father_id, mother_id from table1 order by id")
             assert cur.fetchall() == [
                 (1, "a", None, None),
                 (2, "b", None, None),
@@ -299,7 +291,7 @@ def test_ref_to_self_ref(db, dbdumper, psql):
         [None, None, 2, None, 3, 3, None, None],
         range(1, 9),
     )
-    db.fill_data("table1", ("data", "t2id",), "ijk", (5, 6, 7))
+    db.fill_data("table1", ("data", "t2id"), "ijk", (5, 6, 7))
 
     dbdumper.reader.load_schema()
     dbdumper.add_config(
@@ -320,9 +312,7 @@ db_objects:
     conn = dbdumper.reader.connection
     with conn.transaction():
         with conn.cursor() as cur:
-            cur.execute(
-                "select id, data, father_id, mother_id from table2 order by id"
-            )
+            cur.execute("select id, data, father_id, mother_id from table2 order by id")
             assert cur.fetchall() == [
                 (1, "a", None, None),
                 (2, "b", None, None),
@@ -333,11 +323,5 @@ db_objects:
             ]
 
             cur.execute("select id, data from table3 order by id")
-            assert cur.fetchall() == [
-                (1, "s"),
-                (2, "t"),
-                (3, "u"),
-                (4, "v"),
-                (5, "w"),
-                (7, "y"),
-            ]
+            want = [(1, "s"), (2, "t"), (3, "u"), (4, "v"), (5, "w"), (7, "y")]
+            assert cur.fetchall() == want

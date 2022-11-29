@@ -24,16 +24,13 @@ class Database:
         if obj.oid is not None:
             if obj.oid in self._by_oid:
                 raise ValueError(
-                    "the database already contains an object with oid %s"
-                    % obj.oid
+                    "the database already contains an object with oid %s" % obj.oid
                 )
             self._by_oid[obj.oid] = obj
 
         key = (obj.schema, obj.name)
         if key in self._by_name:
-            raise ValueError(
-                "the database already contains an object called %s" % obj
-            )
+            raise ValueError("the database already contains an object called %s" % obj)
         self._by_name[key] = obj
 
         return obj
@@ -48,9 +45,7 @@ class Database:
         Return None if the object is not found or if it is not the right class.
         """
         if (schema is None) != (name is None):
-            raise TypeError(
-                "you should either specify both schema and name or none"
-            )
+            raise TypeError("you should either specify both schema and name or none")
 
         if schema is not None:
             rv = self._by_name.get((schema, name))

@@ -139,9 +139,7 @@ class DumpRule:
         if self.schemas and obj.schema not in self.schemas:
             return False
 
-        if self.schemas_re is not None and not self.schemas_re.match(
-            obj.schema
-        ):
+        if self.schemas_re is not None and not self.schemas_re.match(obj.schema):
             return False
 
         if self.kinds and obj.kind not in self.kinds:

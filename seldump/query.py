@@ -98,9 +98,7 @@ class SqlQueryVisitor(NodeVisitor):
 
     def indented(self, obj):
         if self._level or not self._first:
-            return sql.Composed(
-                [sql.SQL("\n"), sql.SQL(" " * self._level), obj]
-            )
+            return sql.Composed([sql.SQL("\n"), sql.SQL(" " * self._level), obj])
         else:
             return obj
 

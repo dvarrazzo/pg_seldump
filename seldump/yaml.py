@@ -77,7 +77,7 @@ class ScalarWithPos:
         self.lineno = node.start_mark.line + 1
 
     def __repr__(self):
-        return "%s(%r, %r)" % (self.__class__.__name__, self.obj, self.lineno,)
+        return "%s(%r, %r)" % (self.__class__.__name__, self.obj, self.lineno)
 
     def __hash__(self):
         return hash(self.obj)
@@ -128,24 +128,12 @@ class RichLoader(yaml.SafeLoader):
 
 
 # This really overrides the yaml parser
-RichLoader.add_constructor(
-    "tag:yaml.org,2002:null", RichLoader.construct_yaml_null
-)
-RichLoader.add_constructor(
-    "tag:yaml.org,2002:bool", RichLoader.construct_yaml_bool
-)
-RichLoader.add_constructor(
-    "tag:yaml.org,2002:int", RichLoader.construct_yaml_int
-)
-RichLoader.add_constructor(
-    "tag:yaml.org,2002:float", RichLoader.construct_yaml_float
-)
-RichLoader.add_constructor(
-    "tag:yaml.org,2002:map", RichLoader.construct_yaml_map
-)
-RichLoader.add_constructor(
-    "tag:yaml.org,2002:seq", RichLoader.construct_yaml_seq
-)
+RichLoader.add_constructor("tag:yaml.org,2002:null", RichLoader.construct_yaml_null)
+RichLoader.add_constructor("tag:yaml.org,2002:bool", RichLoader.construct_yaml_bool)
+RichLoader.add_constructor("tag:yaml.org,2002:int", RichLoader.construct_yaml_int)
+RichLoader.add_constructor("tag:yaml.org,2002:float", RichLoader.construct_yaml_float)
+RichLoader.add_constructor("tag:yaml.org,2002:map", RichLoader.construct_yaml_map)
+RichLoader.add_constructor("tag:yaml.org,2002:seq", RichLoader.construct_yaml_seq)
 
 
 def load_yaml(stream):

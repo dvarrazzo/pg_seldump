@@ -20,9 +20,7 @@ def test_bad_start(data):
     assert "object" in errors[0]
 
 
-@pytest.mark.parametrize(
-    "data", ["{}", "db_object: []", "{db_objects: [], foo: null}"]
-)
+@pytest.mark.parametrize("data", ["{}", "db_object: []", "{db_objects: [], foo: null}"])
 def test_must_have_one_root(data):
     """The config entry must have precisely what expected."""
     conf = load_yaml(data)

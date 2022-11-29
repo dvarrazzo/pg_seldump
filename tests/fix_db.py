@@ -48,9 +48,7 @@ def fakeconn(monkeypatch):
     """Return a fake connection useful to pass to Composable.as_string()."""
 
     def fake_as_bytes(self, context):
-        return b".".join(
-            b'"%b"' % n.replace('"', '""').encode() for n in self._obj
-        )
+        return b".".join(b'"%b"' % n.replace('"', '""').encode() for n in self._obj)
 
     monkeypatch.setattr(sql.Identifier, "as_bytes", fake_as_bytes)
     yield None
@@ -180,15 +178,11 @@ order by 1, 2
                 for obj in objs:
                     if isinstance(obj, Table):
                         cur.execute(
-                            sql.SQL("truncate only {} cascade").format(
-                                obj.ident
-                            )
+                            sql.SQL("truncate only {} cascade").format(obj.ident)
                         )
                     elif isinstance(obj, Sequence):
                         seq = sql.Literal(obj.ident.as_string(cur))
-                        cur.execute(
-                            sql.SQL("select setval({}, 1, false)").format(seq)
-                        )
+                        cur.execute(sql.SQL("select setval({}, 1, false)").format(seq))
                     elif isinstance(obj, MaterializedView):
                         # matviews later (but they should be toposorted maybe?)
                         pass
@@ -199,9 +193,7 @@ order by 1, 2
                 for obj in objs:
                     if isinstance(obj, MaterializedView):
                         cur.execute(
-                            sql.SQL("refresh materialized view {}").format(
-                                obj.ident
-                            )
+                            sql.SQL("refresh materialized view {}").format(obj.ident)
                         )
 
     def write_dbobjects(self, cnn, db):
@@ -257,9 +249,7 @@ order by 1, 2
                 # sequence name in a SQL literal, e.g. '"foo"."bar"'
                 seq = db.get(oid=col.used_sequence_oids[0]).ident
                 seq = sql.Literal(seq.as_string(cnn))
-                bits.append(
-                    sql.SQL("default nextval({}::regclass)").format(seq)
-                )
+                bits.append(sql.SQL("default nextval({}::regclass)").format(seq))
             cols.append(sql.SQL(" ").join(bits))
 
         stmt = sql.SQL("create table {} ({})").format(
@@ -285,9 +275,7 @@ order by 1, 2
             create unique index if not exists {} on {} ({})
             """
         ).format(
-            sql.Identifier(
-                "%s_%s_key" % (t2.name, "_".join(fkey.ftable_cols))
-            ),
+            sql.Identifier("%s_%s_key" % (t2.name, "_".join(fkey.ftable_cols))),
             t2.ident,
             sql.SQL(", ").join(map(sql.Identifier, fkey.ftable_cols)),
         )

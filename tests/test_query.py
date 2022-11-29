@@ -31,7 +31,7 @@ def test_query_visit(fakeconn):
         columns=[sql.SQL("*")],
         where=query.Exists(
             query.Select(
-                from_=query.FromEntry(table1, alias="t1",),
+                from_=query.FromEntry(table1, alias="t1"),
                 columns=[sql.SQL("1")],
                 where=query.FkeyJoin(table1.get_fkey("t2id_fkey"), "t1", "t0"),
             )

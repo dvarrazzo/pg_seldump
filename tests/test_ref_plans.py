@@ -19,9 +19,7 @@ def test_subqueries(dumper, db, fakeconn):
             ],
         )
     )
-    dumper.add_config(
-        {"db_objects": [{"name": "table1", "filter": "data='aaa'"}]}
-    )
+    dumper.add_config({"db_objects": [{"name": "table1", "filter": "data='aaa'"}]})
     dumper.plan_dump()
 
     q = dumper.matches[dumper.db.get("public", "table3").oid].query

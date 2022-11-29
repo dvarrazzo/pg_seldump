@@ -53,9 +53,7 @@ def main():
                 outfile = open(opt.outfile, "wb")
                 should_close = True
             except Exception as e:
-                raise ConfigError(
-                    "couldn't open %s for writing: %s" % (outfile, e)
-                )
+                raise ConfigError("couldn't open %s for writing: %s" % (outfile, e))
         else:
             outfile = sys.stdout.buffer
 
@@ -98,9 +96,7 @@ def parse_cmdline():
         description=__doc__, formatter_class=RawDescriptionHelpFormatter
     )
 
-    parser.add_argument(
-        "--version", action="version", version="%%(prog)s %s" % VERSION
-    )
+    parser.add_argument("--version", action="version", version="%%(prog)s %s" % VERSION)
 
     parser.add_argument(
         "config_files",

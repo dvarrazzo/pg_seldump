@@ -42,9 +42,7 @@ def test_names(dumper, db, spec):
     dumper.add_config({"db_objects": [{"names": spec}]})
     dumper.perform_dump()
 
-    tables = [
-        obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)
-    ]
+    tables = [obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)]
     assert len(tables) == 2
     assert dumper.db.get("public", "table1") in tables
     assert dumper.db.get("public", "table2") not in tables
@@ -64,9 +62,7 @@ def test_name_over_names_regexp(dumper, db):
     )
     dumper.perform_dump()
 
-    tables = [
-        obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)
-    ]
+    tables = [obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)]
     assert len(tables) == 2
     assert dumper.db.get("public", "table1") in tables
     assert dumper.db.get("public", "table2") not in tables
@@ -92,9 +88,7 @@ def test_name_same_as_names_list(dumper, db, bias):
 
     dumper.perform_dump()
 
-    tables = [
-        obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)
-    ]
+    tables = [obj for obj, rule in dumper.writer.dumped if isinstance(obj, Table)]
     assert dumper.db.get("public", "table1") in tables
 
     if bias < 0:

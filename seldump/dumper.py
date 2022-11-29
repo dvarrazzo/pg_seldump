@@ -105,9 +105,7 @@ class Dumper:
         # Associate a match to every object of the database
         for obj in self.db:
             assert obj.oid, "by now, every object should have an oid"
-            assert obj.oid not in self.matches, "oid {} is duplicate".format(
-                obj.oid
-            )
+            assert obj.oid not in self.matches, "oid {} is duplicate".format(obj.oid)
             match = self.get_match(obj)
             self.matches[obj.oid] = match
 
@@ -297,9 +295,7 @@ class Dumper:
     def _apply_dump(self, obj, match):
         meth = getattr(self.writer, "dump_" + obj.kind.replace(" ", "_"), None)
         if meth is None:
-            raise DumpError(
-                "don't know how to dump objects of kind %s" % obj.kind
-            )
+            raise DumpError("don't know how to dump objects of kind %s" % obj.kind)
         meth(obj, match)
 
     def _apply_ref(self, obj, match):
@@ -371,15 +367,11 @@ class StatementsGenerator:
         This statement will usually be printed on output, and will be a COPY
         FROM STDIN to read data from the rest of the file.
         """
-        attrs = [
-            col.ident
-            for col in table.columns
-            if col.name not in match.no_columns
-        ]
+        attrs = [col.ident for col in table.columns if col.name not in match.no_columns]
 
-        match.import_statement = sql.SQL(
-            "\ncopy {} ({}) from stdin;\n"
-        ).format(table.ident, sql.SQL(", ").join(attrs))
+        match.import_statement = sql.SQL("\ncopy {} ({}) from stdin;\n").format(
+            table.ident, sql.SQL(", ").join(attrs)
+        )
 
     def set_copy_statement(self, table, match):
         """
@@ -459,9 +451,7 @@ class StatementsGenerator:
             elif fkey.table_oid in seen:
                 logger.warning("not going recursive for now")
                 continue
-            where.append(
-                self._get_existence(table, fkey, parent=alias, seen=seen)
-            )
+            where.append(self._get_existence(table, fkey, parent=alias, seen=seen))
 
         q = query.Select(
             columns=[],
@@ -480,9 +470,7 @@ class StatementsGenerator:
             q = query.Select(
                 columns=[],
                 from_=query.FromEntry(
-                    query.RecursiveCTE(
-                        name=rec_alias, base_query=q, rec_cond=rec_cond
-                    ),
+                    query.RecursiveCTE(name=rec_alias, base_query=q, rec_cond=rec_cond),
                     alias=rec_alias,
                 ),
             )
@@ -492,11 +480,7 @@ class StatementsGenerator:
     def _get_filters(self, table, match):
         rv = []
         if table.extcondition:
-            rv.append(
-                sql.SQL(
-                    re.replace(r"(?i)^\s*where\s+", table.extcondition, "")
-                )
-            )
+            rv.append(sql.SQL(re.replace(r"(?i)^\s*where\s+", table.extcondition, "")))
         if match.filter:
             rv.append(sql.SQL(match.filter.strip()))
 
@@ -510,9 +494,7 @@ class StatementsGenerator:
 
             if col.name in match.replace:
                 rv.append(
-                    sql.SQL("({})").format(
-                        sql.SQL(match.replace[col.name].strip())
-                    )
+                    sql.SQL("({})").format(sql.SQL(match.replace[col.name].strip()))
                 )
             else:
                 rv.append(col.ident)

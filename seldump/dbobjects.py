@@ -29,9 +29,7 @@ class DbObject:
 
     kind = None
 
-    def __init__(
-        self, oid, schema, name, extension=None, extcondition=None,
-    ):
+    def __init__(self, oid, schema, name, extension=None, extcondition=None):
         self.oid = oid
         self.schema = schema
         self.name = name
@@ -86,9 +84,7 @@ class DbObject:
 
         def register_(cls):
             if kind in DbObject._kinds:
-                raise ValueError(
-                    "the kind %s is already associated to a class" % kind
-                )
+                raise ValueError("the kind %s is already associated to a class" % kind)
             DbObject._kinds[kind] = cls
             cls.kind = kind
             return cls
@@ -117,8 +113,7 @@ class Table(DbObject):
     def add_column(self, column):
         if column.name in self._cols_by_name:
             raise ValueError(
-                "the table %s has already a column called %s"
-                % (self, column.name)
+                "the table %s has already a column called %s" % (self, column.name)
             )
         self.columns.append(column)
         self._cols_by_name[column.name] = column
@@ -131,9 +126,7 @@ class Table(DbObject):
             # using format because https://github.com/psf/black/issues/1259
             assert (
                 col in self._cols_by_name
-            ), "column {} in fkey {} is not in the table {}".format(
-                col, fkey, self,
-            )
+            ), "column {} in fkey {} is not in the table {}".format(col, fkey, self)
         self.fkeys.append(fkey)
 
     def get_fkey(self, name):
@@ -145,9 +138,7 @@ class Table(DbObject):
         for col in fkey.ftable_cols:
             assert (
                 col in self._cols_by_name
-            ), "column {} in fkey {} is not in the table {}".format(
-                col, fkey, self,
-            )
+            ), "column {} in fkey {} is not in the table {}".format(col, fkey, self)
         self.ref_fkeys.append(fkey)
 
 

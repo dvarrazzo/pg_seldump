@@ -37,9 +37,7 @@ class TestReader(Reader):
                     dbobj.add_column(dbcol)
 
                     if "use_sequence" in col:
-                        used_seqs["public", col["use_sequence"]].append(
-                            (dbobj, dbcol)
-                        )
+                        used_seqs["public", col["use_sequence"]].append((dbobj, dbcol))
 
             self.db.add_object(dbobj)
 
