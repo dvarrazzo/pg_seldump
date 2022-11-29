@@ -45,9 +45,9 @@ Topic :: Utilities
 """
 
 requirements = """
-psycopg>=3.1
-jsonschema>=3.2,<3.3
-PyYAML>=3,<5.4
+psycopg >= 3.1
+jsonschema >= 4.17
+PyYAML >= 6
 """
 
 setup(
@@ -58,11 +58,15 @@ setup(
     author_email="daniele.varrazzo@gmail.com",
     url="https://github.com/dvarrazzo/pg_seldump",
     license="BSD",
-    python_requires=">=3.5",
+    python_requires=">= 3.7",
     install_requires=requirements,
     extras_require={
         "test": [
-            "pytest >= 5.3,<6",
+            "pytest >= 7.2",
+        ],
+        "dev": [
+            "black",
+            "flake8",
         ],
     },
     packages=["seldump"],
