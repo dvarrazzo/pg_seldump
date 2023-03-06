@@ -298,7 +298,7 @@ class Dumper:
             raise DumpError("don't know how to dump objects of kind %s" % obj.kind)
         meth(obj, match)
 
-    def _apply_ref(self, obj, match):
+    def _apply_referenced(self, obj, match):
         self._apply_dump(obj, match)
 
 

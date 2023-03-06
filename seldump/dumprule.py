@@ -24,7 +24,7 @@ class DumpRule:
     ACTION_DUMP = "dump"
     ACTION_SKIP = "skip"
     ACTION_ERROR = "error"
-    ACTION_REFERENCED = "ref"
+    ACTION_REFERENCED = "referenced"
     ACTION_UNKNOWN = "unknown"
 
     def __init__(

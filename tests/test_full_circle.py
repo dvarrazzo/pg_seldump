@@ -95,7 +95,7 @@ db_objects:
     data: "'x'"
 
 - name: table2
-  action: ref
+  action: referenced
   no_columns:
   - password
   replace:
@@ -300,7 +300,7 @@ db_objects:
 - name: table1
   filter: data = any('{i,k}')
 - name: table2
-  action: ref
+  action: referenced
   no_columns: []
 """
     )
