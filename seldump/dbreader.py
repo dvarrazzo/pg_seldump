@@ -115,17 +115,17 @@ select
     -- extcondition[array_position(extconfig, r.oid)]
     -- but array_position not available < PG 9.5
     (
-        select extcondition[row_number]
+        select e.extcondition[row_number]
         from (
             select unnest, row_number() over ()
-            from (select unnest(extconfig)) t0
+            from (select unnest(e.extconfig)) t0
         ) t1
         where unnest = r.oid
     ) as extcondition
 from pg_class r
 join pg_namespace s on s.oid = r.relnamespace
-left join pg_depend d on d.objid = r.oid and d.deptype = 'e'
-left join pg_extension e on d.refobjid = e.oid
+left join pg_extension ec on r.oid = any(ec.extconfig)
+left join pg_extension e on ec.oid = e.oid
 where r.relkind = any(%(stateless)s)
 and s.nspname != 'information_schema'
 and s.nspname !~ '^pg_'
