@@ -325,3 +325,53 @@ db_objects:
             cur.execute("select id, data from table3 order by id")
             want = [(1, "s"), (2, "t"), (3, "u"), (4, "v"), (5, "w"), (7, "y")]
             assert cur.fetchall() == want
+
+
+def test_referencing(db, dbdumper, psql):
+    """
+    Can declare the records to dump as the ones referencing another table.
+
+    table1 -> table2 <- table3 <- table5
+                ^            |
+                +-- table4   +-> table6
+    """
+    objs = db.create_sample(
+        6,
+        fkeys=[
+            ("table1", "t2id", "table2", "id"),
+            ("table3", "t2id", "table2", "id"),
+            ("table3", "t6id", "table6", "id"),
+            ("table4", "t2id", "table2", "id"),
+            ("table5", "t3id", "table3", "id"),
+        ],
+    )
+    db.write_schema(objs)
+    db.fill_data("table2", ("data",), "abcd")
+    db.fill_data("table6", ("data",), "pq")
+    db.fill_data("table1", ("data", "t2id"), "wxyz", [1, 2, 3, 4])
+    db.fill_data(
+        "table3",
+        ("data", "t2id", "t6id"),
+        "efghij",
+        [1, 1, 2, 2, 3, 3],
+        [1, None, None, None, 2, None],
+    )
+    db.fill_data("table4", ("data", "t2id"), "efghij", [1, 1, 2, 2, 3, 3])
+    db.fill_data("table5", ("data", "t3id"), "mn", [1, 2])
+
+    dbdumper.reader.load_schema()
+    dbdumper.add_config(
+        """
+db_objects:
+- name: table1
+  filter: data = any('{x,y}')
+- name: table3
+  action: referencing
+- name: table5
+  action: referencing
+"""
+    )
+    dbdumper.perform_dump()
+
+    db.truncate(dbdumper.db)
+    psql.load_file(dbdumper.writer.outfile)

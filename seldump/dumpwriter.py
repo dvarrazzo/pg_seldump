@@ -63,7 +63,7 @@ class DumpWriter(Writer):
         self.write(match.import_statement)
 
         stmt = self.reader.obj_as_string(match.copy_statement)
-        logger.debug("exporting using: %s", stmt)
+        logger.debug("exporting using:\n%s", stmt)
 
         self._begin_copy()
         try:

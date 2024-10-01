@@ -118,7 +118,7 @@ class TestingDatabase:
             if f2 not in rv[t2]["columns"]:
                 rv[t2]["columns"][f2] = {"name": f2, "type": "integer"}
             fkey = {
-                "name": "%s_%s_%s_fkey" % (f1, t2, f2),
+                "name": "%s_%s_%s_%s_fkey" % (t1, f1, t2, f2),
                 "cols": [f1],
                 "ftable": t2,
                 "fcols": [f2],

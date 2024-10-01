@@ -25,6 +25,7 @@ class DumpRule:
     ACTION_SKIP = "skip"
     ACTION_ERROR = "error"
     ACTION_REFERENCED = "referenced"
+    ACTION_REFERENCING = "referencing"
     ACTION_UNKNOWN = "unknown"
 
     def __init__(
@@ -166,11 +167,20 @@ class RuleMatch:
         self.filter = None
 
         self.referenced_by = []
+        self.referencing = []
 
         self.query = None
         self.import_statement = None
         self.copy_statement = None
         self.errors = []
+
+    def __repr__(self):
+        return "<%s (%s on %s) at 0x%x>" % (
+            self.__class__.__name__,
+            self.action,
+            self.obj,
+            id(self),
+        )
 
     @classmethod
     def from_rule(cls, obj, rule):

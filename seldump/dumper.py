@@ -113,12 +113,12 @@ class Dumper:
         for obj in self.db:
             if not isinstance(obj, Table):
                 continue
-            if self.matches[obj.oid].action not in (
+            if self.matches[obj.oid].action in (
                 DumpRule.ACTION_DUMP,
                 DumpRule.ACTION_REFERENCED,
+                DumpRule.ACTION_REFERENCING,
             ):
-                continue
-            self._add_referred_tables(obj)
+                self._add_referenced_tables(obj)
 
         # Find unmentioned sequences and check if any table depend on them
         for obj in self.db:
@@ -181,13 +181,13 @@ class Dumper:
             match = self.matches[obj.oid]
             meth = getattr(self, "_apply_" + match.action, None)
             if meth is None:
-                raise DumpError("cannot dump a match %s", match.action)
+                raise DumpError("cannot dump a match %r" % match.action)
 
             meth(obj, match)
 
         self.writer.end_dump()
 
-    def _add_referred_tables(self, table, seen=None):
+    def _add_referenced_tables(self, table, seen=None):
         logger.debug("exploring %s foreign keys", table)
         if seen is None:
             seen = set()
@@ -200,20 +200,23 @@ class Dumper:
         for fkey in table.fkeys:
             logger.debug("found fkey %s", fkey.name)
             fmatch = self.matches[fkey.ftable_oid]
-            if fmatch.action not in (
-                DumpRule.ACTION_UNKNOWN,
-                DumpRule.ACTION_REFERENCED,
-                DumpRule.ACTION_DUMP,
-            ):
-                # skip, dump, error: we don't have to navigate it tho
-                continue
 
             if fmatch.action == DumpRule.ACTION_UNKNOWN:
                 fmatch.action = DumpRule.ACTION_REFERENCED
-            if fkey not in fmatch.referenced_by:
-                fmatch.referenced_by.append(fkey)
 
-            self._add_referred_tables(fmatch.obj, seen)
+            if fmatch.action in (
+                DumpRule.ACTION_REFERENCED,
+                DumpRule.ACTION_DUMP,
+            ):
+                if fkey not in fmatch.referenced_by:
+                    fmatch.referenced_by.append(fkey)
+
+                self._add_referenced_tables(fmatch.obj, seen)
+
+            elif fmatch.action == DumpRule.ACTION_REFERENCING:
+                breakpoint()
+                if fkey not in fmatch.referencing:
+                    fmatch.referencing.append(fkey)
 
     def _get_sequence_dependency_match(self, seq):
         for table, column in self.db.get_tables_using_sequence(seq.oid):
@@ -221,6 +224,7 @@ class Dumper:
             if ta.action not in (
                 DumpRule.ACTION_DUMP,
                 DumpRule.ACTION_REFERENCED,
+                DumpRule.ACTION_REFERENCING,
             ):
                 continue
 
@@ -301,6 +305,9 @@ class Dumper:
     def _apply_referenced(self, obj, match):
         self._apply_dump(obj, match)
 
+    def _apply_referencing(self, obj, match):
+        self._apply_dump(obj, match)
+
 
 class StatementsGenerator:
     """
@@ -323,6 +330,7 @@ class StatementsGenerator:
         if match.action not in (
             DumpRule.ACTION_DUMP,
             DumpRule.ACTION_REFERENCED,
+            DumpRule.ACTION_REFERENCING,
         ):
             return
 
@@ -377,7 +385,7 @@ class StatementsGenerator:
         """
         Set the statement used to extract data from the db on the `match`.
 
-        This statement will be a COPY TO STDOUT that will be executed ad dump
+        This statement will be a COPY TO STDOUT that will be executed at dump
         time and the output will be added to the dump file.
 
         The function also sets `match.query`, the query generated.
@@ -443,10 +451,31 @@ class StatementsGenerator:
         seen = (seen or set()) | {table.oid}
 
         srfkeys = []
+        if table.name == "table2":
+            breakpoint()
+
         for fkey in match.referenced_by:
             # self-referential fkeys are dealt with later
             if fkey.table_oid == fkey.ftable_oid:
                 srfkeys.append(fkey)
+                continue
+            elif fkey.table_oid in seen:
+                logger.warning("not going recursive for now")
+                continue
+
+            # If the table we are referred by only needs to dump referring
+            # records, then we are in charge and we don't need to consider
+            # records from the other table.
+            fmatch = self.dumper.matches[fkey.table_oid]
+            if fmatch.action == DumpRule.ACTION_REFERENCING:
+                continue
+
+            where.append(self._get_existence(table, fkey, parent=alias, seen=seen))
+
+        for fkey in match.referencing:
+            breakpoint()
+            # There shouldn't be self-referential fkeys. Ignore them anyway
+            if fkey.table_oid == fkey.ftable_oid:
                 continue
             elif fkey.table_oid in seen:
                 logger.warning("not going recursive for now")
