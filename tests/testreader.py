@@ -33,7 +33,8 @@ class TestReader(Reader):
             if "columns" in obj:
                 for colname, col in obj["columns"].items():
                     coltype = col["type"]
-                    dbcol = Column(name=colname, type=coltype)
+                    generated = col.get("generated", None)
+                    dbcol = Column(name=colname, type=coltype, generated=generated)
                     dbobj.add_column(dbcol)
 
                     if "use_sequence" in col:

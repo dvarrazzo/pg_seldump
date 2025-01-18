@@ -173,6 +173,41 @@ db_objects:
             assert cur.fetchall() == [(4, "r"), (5, "s"), (6, "t")]
 
 
+def test_default_columns(db, dbdumper, psql):
+    """
+    Test that generated columns are not dumped.
+    """
+    table = {"name": "table1", "schema": "public", "columns": {}}
+    table["columns"]["id"] = {"name": "id", "type": "integer"}
+    table["columns"]["id2"] = {
+        "name": "id2",
+        "type": "integer",
+        "generated": "generated always as (id * 2) stored",
+    }
+    db.write_schema([table])
+    db.fill_data("table1", "id", (1, 2, 3, 4))
+
+    dbdumper.reader.load_schema()
+    dbdumper.add_config(
+        """
+db_objects:
+- name: table1
+  action: dump
+"""
+    )
+    dbdumper.perform_dump()
+    db.truncate(dbdumper.db)
+    psql.load_file(dbdumper.writer.outfile)
+    conn = dbdumper.reader.connection
+    with conn.cursor() as cur:
+        cur.execute("select id, id2 from table1")
+        recs = cur.fetchall()
+
+    assert len(recs) == 4
+    for rec in recs:
+        assert 2 * rec[0] == rec[1]
+
+
 def test_dump_and_ref(db, dbdumper, psql):
     """
     Tables can have some records referred, some dumped.
