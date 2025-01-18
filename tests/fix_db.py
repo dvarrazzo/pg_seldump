@@ -244,7 +244,9 @@ order by 1, 2
         cols = []
         for col in table.columns:
             bits = [col.ident, sql.SQL(col.type)]
-            if col.used_sequence_oids:
+            if col.generated is not None:
+                bits.append(sql.SQL(col.generated))
+            elif col.used_sequence_oids:
                 assert len(col.used_sequence_oids) == 1
                 # sequence name in a SQL literal, e.g. '"foo"."bar"'
                 seq = db.get(oid=col.used_sequence_oids[0]).ident

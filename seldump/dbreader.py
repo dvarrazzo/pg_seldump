@@ -65,7 +65,7 @@ class DbReader(Reader):
                 rec.table_oid,
                 rec.name,
             )
-            col = Column(name=rec.name, type=rec.type)
+            col = Column(name=rec.name, type=rec.type, generated=rec.generated)
             table.add_column(col)
 
         for rec in self._fetch_fkeys():
@@ -164,7 +164,8 @@ join pg_class seq
 select
     attrelid as table_oid,
     attname as name,
-    atttypid::regtype as type
+    atttypid::regtype as type,
+    nullif(attgenerated, '') as generated
 from pg_attribute a
 join pg_class r on r.oid = a.attrelid
 join pg_namespace s on s.oid = r.relnamespace

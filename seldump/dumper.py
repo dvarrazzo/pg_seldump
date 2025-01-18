@@ -367,7 +367,11 @@ class StatementsGenerator:
         This statement will usually be printed on output, and will be a COPY
         FROM STDIN to read data from the rest of the file.
         """
-        attrs = [col.ident for col in table.columns if col.name not in match.no_columns]
+        attrs = [
+            col.ident
+            for col in table.columns
+            if not col.generated and col.name not in match.no_columns
+        ]
 
         match.import_statement = sql.SQL("\ncopy {} ({}) from stdin;\n").format(
             table.ident, sql.SQL(", ").join(attrs)
@@ -489,7 +493,7 @@ class StatementsGenerator:
     def _get_dump_attrs(self, table, match):
         rv = []
         for col in table.columns:
-            if col.name in match.no_columns:
+            if col.generated or col.name in match.no_columns:
                 continue
 
             if col.name in match.replace:

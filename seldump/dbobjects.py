@@ -160,11 +160,12 @@ class MaterializedView(DbObject):
 
 
 class Column:
-    __slots__ = ("name", "type", "used_sequence_oids")
+    __slots__ = ("name", "type", "generated", "used_sequence_oids")
 
-    def __init__(self, name, type):
+    def __init__(self, name, type, generated=None):
         self.name = name
         self.type = type
+        self.generated = generated
         self.used_sequence_oids = []
 
     @property
