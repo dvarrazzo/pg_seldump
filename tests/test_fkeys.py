@@ -18,6 +18,26 @@ def test_fkey_nav(dumper, db):
     assert len(objs) == 2
 
 
+def test_fkeyed_dump(dumper, db):
+    """
+    Test one navigation step
+
+        table1:dump -> table2:dump
+    """
+    dumper.reader.load_db(
+        db.create_sample(2, fkeys=[("table1", "t2id", "table2", "id")])
+    )
+    dumper.add_config({"db_objects": [{"names": ["table1", "table2"]}]})
+    dumper.perform_dump()
+
+    match, = [
+        match
+        for obj, match in dumper.writer.dumped
+        if isinstance(obj, Table) and obj.name == "table2"
+    ]
+    assert match.query is None
+
+
 def test_fkey_nav_rec(dumper, db):
     """
     Test navigation is transitive

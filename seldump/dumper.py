@@ -388,24 +388,26 @@ class StatementsGenerator:
         """
         # If False can use "copy table (attrs) to stdout" to dump data.
         # Otherwise must use a slower "copy (query) to stdout"
-        if not (
-            match.action != DumpRule.ACTION_DUMP
-            or match.replace
-            or match.filter
-            or table.extcondition
-            or table.ref_fkeys
+        if (
+            match.action == DumpRule.ACTION_DUMP
+            and not match.replace
+            and not match.filter
+            and not table.extcondition
         ):
             self._set_copy_to_simple(table, match)
         else:
-            match.query = self.make_query(table, match)
-            copy = query.CopyOut(match.query)
-            match.copy_statement = query.SqlQueryVisitor().visit(copy)
+            self._set_copy_to_query(table, match)
 
     def _set_copy_to_simple(self, table, match):
         attrs = self._get_dump_attrs(table, match)
         match.copy_statement = sql.SQL("copy {} ({}) to stdout").format(
             table.ident, sql.SQL(", ").join(attrs)
         )
+
+    def _set_copy_to_query(self, table, match):
+        match.query = self.make_query(table, match)
+        copy = query.CopyOut(match.query)
+        match.copy_statement = query.SqlQueryVisitor().visit(copy)
 
     def make_query(self, table, match):
         """
