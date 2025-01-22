@@ -58,7 +58,7 @@ setup(
     author_email="daniele.varrazzo@gmail.com",
     url="https://github.com/dvarrazzo/pg_seldump",
     license="BSD",
-    python_requires=">= 3.7",
+    python_requires=">= 3.9",
     install_requires=requirements,
     extras_require={
         "test": [
