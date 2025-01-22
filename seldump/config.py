@@ -1,6 +1,6 @@
 import re
 import logging
-import pkg_resources
+import importlib.resources
 
 import yaml
 from jsonschema import Draft7Validator
@@ -11,7 +11,7 @@ logger = logging.getLogger("seldump.config")
 
 validator = Draft7Validator(
     schema=yaml.load(
-        pkg_resources.resource_string("seldump", "schema/config.yaml"),
+        (importlib.resources.files("seldump") / "schema/config.yaml").read_text(),
         Loader=yaml.SafeLoader,
     )
 )
